@@ -19,12 +19,15 @@ The interface can have methods excluded from linking with the JFR types - by ann
 ```java
 
 @JfrType("custom.MyEvent")
-public interface MyEvent extends JfrEvent {}
+public interface MyEvent extends JfrEvent {
+  String myfield();
+}
 
 JafarParser parser = JafarParser.open("path_to_jfr.jfr");
 parser.handle(MyEvent.class, event -> {
     System.out.println(event.startTime());
     System.out.println(event.eventThread().javaName());
+    System.out.println(event.myfield());
 });
 parser.handle(MyEvent.class, event -> {
     // do something else
