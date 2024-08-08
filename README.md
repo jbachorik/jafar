@@ -4,6 +4,9 @@ Experimental, incomplete JFR parser
 Very much a work in progress. 
 The goal is to be able to parse JFR files and extract the event data in programmatic way with the least effort possible.
 
+## Requirements
+Java 21 (mostly just because I wanted to try the pattern matching)
+
 ## Tl;DR
 Allow quickly wiring JFR with interface based handlers using bytecode generation.
 I was nerdsniped by [@nitsanw](https://github.com/nitsanw) and quickly thrown together this more or less a PoC.
