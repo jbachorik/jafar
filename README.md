@@ -22,8 +22,12 @@ parser.handle(MyEvent.class, event -> {
     System.out.println(event.startTime());
     System.out.println(event.eventThread().javaName());
 });
+parser.handle(MyEvent.class, event -> {
+    // do something else
+});
 parser.run();
 ```
 
-This short program will parse the recording and call the `handle` method for each `custom.MyEvent` event. 
+This short program will parse the recording and call the `handle` method for each `custom.MyEvent` event.
+The number of handlers per type is not limited, they all will be executed sequentially.
 With the handlers known beforehand, the parser can safely skip all unreachable events and types, massively saving on the parsing time.
