@@ -6,7 +6,7 @@ The goal is to be able to parse JFR files and extract the event data in programm
 
 ## Tl;DR
 Allow quickly wiring JFR with interface based handlers using bytecode generation.
-I was nerdsniped by @nitsanw and quickly thrown together this more or less a PoC.
+I was nerdsniped by [@nitsanw](https://github.com/nitsanw) and quickly thrown together this more or less a PoC.
 
 ## Usage
 The main idea is to define a handling interface which corresponds to a JFR event type. The linking is done via `@JfrType` 
