@@ -1,10 +1,11 @@
 package io.jafar.parser;
 
+import io.jafar.parser.internal_api.DeserializationHandler;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.lang.invoke.MethodHandle;
 
-public final class JFRValueDeserializer<T> {
+public final class JFRValueDeserializer<T> implements DeserializationHandler<T> {
     private final Class<T> clazz;
     private MethodHandle handler = null;
 
@@ -24,8 +25,13 @@ public final class JFRValueDeserializer<T> {
         return clazz;
     }
 
+    public JFRValueDeserializer<T> duplicate() {
+        return new JFRValueDeserializer<>(clazz);
+    }
+
     @SuppressWarnings("unchecked")
-    public <T> T deserialize(RecordingStream stream) {
+    @Override
+    public T handle(RecordingStream stream) {
         try {
             T value = handler != null ? (T) handler.invoke(stream) : null;
             return value;

@@ -29,6 +29,10 @@ public final class ParsingUtils {
         return null;
       } else if (id == 1) {
         return "";
+      } else if (id == 2) {
+        // string constant
+        int ptr = (int)stream.readVarint();
+        return stream.getContext().getMetadataLookup().getString(ptr);
       } else if (id == 3) {
         // UTF8
         int size = (int) stream.readVarint();
@@ -65,6 +69,9 @@ public final class ParsingUtils {
         for (int i = 0; i < size; i++) {
           stream.readVarint();
         }
+      }
+      case 2 -> {
+        stream.readVarint();
       }
     }
   }
