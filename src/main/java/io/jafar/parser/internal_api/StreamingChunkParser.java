@@ -1,12 +1,21 @@
 package io.jafar.parser.internal_api;
 
+import io.jafar.parser.MutableConstantPools;
+import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.internal_api.metadata.MetadataEvent;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Streaming, almost zero-allocation, JFR chunk parser implementation. <br>
@@ -15,8 +24,21 @@ import java.nio.ByteBuffer;
  * metadata events to come 'out-of-band' (although not very probable) and it is up to the caller to
  * deal with that eventuality. <br>
  */
-public final class StreamingChunkParser {
+public final class StreamingChunkParser implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(StreamingChunkParser.class);
+
+  private final Int2ObjectMap<MutableMetadataLookup> chunkMetadataLookup = new Int2ObjectOpenHashMap<>();
+  private final Int2ObjectMap<MutableConstantPools> chunkConstantPools = new Int2ObjectOpenHashMap<>();
+
+  private final ExecutorService executor = Executors.newFixedThreadPool(
+          Math.max(Runtime.getRuntime().availableProcessors() - 2, 1),
+          r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+          });
+
+  private boolean closed = false;
 
   /**
    * Parse the given JFR recording stream.<br>
@@ -38,56 +60,59 @@ public final class StreamingChunkParser {
    * @throws IOException
    */
   public void parse(ByteBuffer buffer, ChunkParserListener listener) throws IOException {
+    if (closed) {
+      throw new IllegalStateException("Parser is closed");
+    }
     try (RecordingStream stream = new RecordingStream(buffer)) {
       parse(stream, listener, false);
     }
   }
 
   public void parse(ByteBuffer buffer, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
+    if (closed) {
+      throw new IllegalStateException("Parser is closed");
+    }
     try (RecordingStream stream = new RecordingStream(buffer)) {
       parse(stream, listener, forceConstantPools);
     }
   }
 
-  private void parse(RecordingStream stream, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
-    if (stream.available() == 0) {
-      return;
+  @Override
+  public void close() throws Exception {
+    if (!closed) {
+      closed = true;
+      executor.shutdown();
+      chunkConstantPools.clear();
+      chunkMetadataLookup.clear();
     }
-    try {
-      listener.onRecordingStart(stream.getContext());
-      int chunkCounter = 1;
-      outer:
-      while (stream.available() > 0) {
-        ChunkHeader header = new ChunkHeader(stream, chunkCounter);
-        if (!listener.onChunkStart(chunkCounter, header, stream.getContext())) {
+  }
+
+  private Future<Boolean> submitParsingTask(ChunkHeader chunkHeader, RecordingStream chunkStream, ChunkParserListener listener, boolean forceConstantPools, int remainder) {
+    return executor.submit(() -> {
+      int chunkCounter = chunkHeader.order;
+      try {
+        if (!listener.onChunkStart(chunkCounter, chunkHeader, chunkStream.getContext())) {
           log.debug(
                   "'onChunkStart' returned false. Skipping metadata and events for chunk {}",
                   chunkCounter);
-          stream.skip(header.size - (stream.position() - header.offset));
           listener.onChunkEnd(chunkCounter, true);
-          chunkCounter++;
-          continue;
+          return true;
         }
-        int remainder = (stream.position() - header.offset);
-        RecordingStream chunkStream = stream.slice(header.offset, header.size, true);
-        stream.position(header.offset + header.size);
         // read metadata
-        if (!readMetadata(chunkStream, header, listener, forceConstantPools)) {
+        if (!readMetadata(chunkStream, chunkHeader, listener, forceConstantPools)) {
           log.debug(
                   "'onMetadata' returned false. Skipping events for chunk {}", chunkCounter);
           listener.onChunkEnd(chunkCounter, true);
-          chunkCounter++;
-          continue;
+          return false;
         }
-        if (!readConstantPool(chunkStream, header, listener)) {
+        if (!readConstantPool(chunkStream, chunkHeader, listener)) {
           log.debug(
-                  "'onCheckpoint' returned false. Skipping the rest of the chunk {}",chunkCounter);
+                  "'onCheckpoint' returned false. Skipping the rest of the chunk {}", chunkCounter);
           listener.onChunkEnd(chunkCounter, true);
-          chunkCounter++;
-          continue;
+          return false;
         }
         chunkStream.position(remainder);
-        while (chunkStream.position() < header.size) {
+        while (chunkStream.position() < chunkHeader.size) {
           int eventStartPos = chunkStream.position();
           chunkStream.mark(); // max 2 varints ahead
           int eventSize = (int) chunkStream.readVarint();
@@ -102,24 +127,51 @@ public final class StreamingChunkParser {
                         eventSize - (currentPos - eventStartPos),
                         chunkCounter);
                 listener.onChunkEnd(chunkCounter, true);
-                chunkCounter++;
-                continue outer;
+                return false;
               }
             }
             // always skip any unconsumed event data to get the stream into consistent state
             chunkStream.position(eventStartPos + eventSize);
           }
         }
-        if (!listener.onChunkEnd(chunkCounter, false)) {
-          return;
-        }
+        return listener.onChunkEnd(chunkCounter, false);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
+
+  private void parse(RecordingStream stream, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
+    if (stream.available() == 0) {
+      return;
+    }
+    try {
+      List<Future<Boolean>> results = new ArrayList<>();
+      listener.onRecordingStart(stream.getContext());
+      int chunkCounter = 1;
+      while (stream.available() > 0) {
+        ChunkHeader header = new ChunkHeader(stream, chunkCounter);
+        int remainder = (stream.position() - header.offset);
+        MutableMetadataLookup metadataLookup = chunkMetadataLookup.computeIfAbsent(chunkCounter, k -> new MutableMetadataLookup());
+        MutableConstantPools constantPools = chunkConstantPools.computeIfAbsent(chunkCounter, k -> new MutableConstantPools(metadataLookup));
+
+        RecordingStream chunkStream = stream.slice(header.offset, header.size, new ParserContext(stream.getContext().getTypeFilter(), chunkCounter, metadataLookup, constantPools));
+        stream.position(header.offset + header.size);
+
+        results.add(submitParsingTask(header, chunkStream, listener, forceConstantPools, remainder));
         chunkCounter++;
       }
+      results.forEach(f -> {
+        try {
+          f.get();
+        } catch (Throwable t) {
+          throw new RuntimeException(t);
+        }
+      });
     } catch(EOFException e) {
       throw new IOException("Invalid buffer", e);
     } catch (Throwable t) {
-      t.printStackTrace();
-      throw t;
+      throw new IOException("Error parsing recording", t);
     } finally {
       listener.onRecordingEnd();
     }
@@ -137,28 +189,25 @@ public final class StreamingChunkParser {
   }
 
   private boolean readConstantPool(RecordingStream stream, ChunkHeader header, ChunkParserListener listener) throws IOException {
-    stream.mark();
-    if (readConstantPool(stream, header.cpOffset, listener)) {
-      stream.reset();
-      return true;
-    }
-    return false;
+    return readConstantPool(stream, header.cpOffset, listener);
   }
 
   private boolean readConstantPool(RecordingStream stream, int position, ChunkParserListener listener) throws IOException {
-    stream.position(position);
-    // checkpoint event
-    CheckpointEvent event = new CheckpointEvent(stream);
-    event.readConstantPools();
-    if (!listener.onCheckpoint(event)) {
-      return false;
+    while (true) {
+      stream.position(position);
+      CheckpointEvent event = new CheckpointEvent(stream);
+      event.readConstantPools();
+      if (!listener.onCheckpoint(event)) {
+        return false;
+      }
+      int delta = event.nextOffsetDelta;
+      if (delta != 0) {
+        position += delta;
+      } else {
+        break;
+      }
     }
-//
-//    int delta = event.nextOffsetDelta;
-//    event = null;
-//    if (delta != 0) {
-//      return readConstantPool(stream, position + delta, listener);
-//    }
+    stream.getContext().getConstantPools().setReady();
     return true;
   }
 }

@@ -20,6 +20,7 @@ dependencies {
     implementation 'org.jctools:jctools-core:4.0.1'
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.5'
     implementation 'org.ow2.asm:asm:9.5'
+    implementation 'org.openjdk.jmc:flightrecorder:8.3.1'
 
     testImplementation 'org.openjdk.jmc:flightrecorder.writer:8.2.1'
     testImplementation 'org.mockito:mockito-core:5.12.0'

@@ -1,7 +1,6 @@
 package io.jafar.parser.internal_api;
 
 import io.jafar.parser.AbstractEvent;
-import io.jafar.parser.JFRValueDeserializer;
 import io.jafar.parser.MutableConstantPool;
 import io.jafar.parser.TypeFilter;
 import io.jafar.parser.ValueLoader;
@@ -35,9 +34,11 @@ public final class CheckpointEvent extends AbstractEvent {
         this.isFlush = stream.read() != 0;
     }
 
-    public void readConstantPools() throws IOException {
+    void readConstantPools() throws IOException {
         ParserContext context = stream.getContext();
         TypeFilter typeFilter = context.getTypeFilter();
+
+        boolean skipAll = context.getConstantPools().isReady();
 
         long cpCount = stream.readVarint();
         for (long i = 0; i < cpCount; i++) {
@@ -50,16 +51,16 @@ public final class CheckpointEvent extends AbstractEvent {
                 if (clz == null) {
                     continue;
                 }
-                boolean skip = typeFilter != null && !typeFilter.test(clz);
+                boolean skip = skipAll || (typeFilter != null && !typeFilter.test(clz));
                 for (int j = 0; j < count; j++) {
                     long id = stream.readVarint();
                     if (skip) {
                         ValueLoader.skip(stream, clz, false, false);
                     } else {
                         stream.mark();
-                        JFRValueDeserializer<?> deserializer = clz.getDeserializer();
+                        DeserializationHandler<?> deserializer = context.getDeserializers().getDeserializer(clz.getName());
                         if (deserializer != null) {
-                            constantPool.addValue(id, deserializer.deserialize(stream));
+                            constantPool.addValue(id, deserializer.handle(stream));
                             // custom serialization may have consumed the stream, so we need to reset it
                             // and skip till the end of the value
                             stream.reset();
@@ -67,7 +68,6 @@ public final class CheckpointEvent extends AbstractEvent {
                         } else {
                             stream.reset();
                             ValueLoader.skip(stream, clz, false, false);
-//                            constantPool.addValue(id, ValueLoader.loadValue(stream, clz, false, false));
                         }
                     }
                 }

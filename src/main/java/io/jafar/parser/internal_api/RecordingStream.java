@@ -16,12 +16,8 @@ public final class RecordingStream implements AutoCloseable {
     this(buffer, new ParserContext());
   }
 
-  RecordingStream slice(int len) {
-    return slice(delegate.position(), len, false);
-  }
-
-  public RecordingStream slice(int pos, int len, boolean reset) {
-    return new RecordingStream(delegate.slice(pos, len), reset ? new ParserContext(context.getTypeFilter()) : context);
+  public RecordingStream slice(int pos, int len, ParserContext context) {
+    return new RecordingStream(delegate.slice(pos, len), context);
   }
 
   private RecordingStream(ByteBuffer buffer, ParserContext context) {

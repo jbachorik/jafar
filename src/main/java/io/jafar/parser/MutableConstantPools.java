@@ -12,6 +12,7 @@ public final class MutableConstantPools implements ConstantPools {
     private final Long2ObjectMap<MutableConstantPool> poolMap = new Long2ObjectOpenHashMap<>();
 
     private final MetadataLookup metadata;
+    private boolean ready = false;
 
     public MutableConstantPools(MetadataLookup metadata) {
         this.metadata = metadata;
@@ -25,6 +26,15 @@ public final class MutableConstantPools implements ConstantPools {
     @Override
     public boolean hasConstantPool(long typeId) {
         return poolMap.containsKey(typeId);
+    }
+
+    @Override
+    public boolean isReady() {
+        return ready;
+    }
+
+    public void setReady() {
+        ready = true;
     }
 
     @Override

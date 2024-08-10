@@ -1,6 +1,7 @@
 package io.jafar.parser.internal_api.metadata;
 
-import io.jafar.parser.JFRValueDeserializer;
+import io.jafar.parser.ParsingUtils;
+import io.jafar.parser.ValueLoader;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
@@ -23,8 +24,9 @@ public final class MetadataClass extends AbstractMetadataElement {
     private final String superType;
     private final boolean isSimpleType;
     private final boolean isPrimitive;
+    private final boolean simple;
 
-    private JFRValueDeserializer<?> deserializer;
+    final ExceptionalConsumer<RecordingStream, IOException> skipInstruction;
 
     MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.CLASS);
@@ -32,17 +34,12 @@ public final class MetadataClass extends AbstractMetadataElement {
         this.superType = getAttribute("superType");
         this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
         this.isPrimitive = primitiveTypeNames.contains(getName());
+        this.simple = isSimpleType || isPrimitive(name);
         metadataLookup.addClass(id, this);
         resetAttributes();
         readSubelements(reader);
-    }
-
-    public void setDeserializer(JFRValueDeserializer<?> deserializer) {
-        this.deserializer = deserializer;
-    }
-
-    public JFRValueDeserializer<?> getDeserializer() {
-        return deserializer;
+        // must be the last instruction such that all fields are resolved
+        this.skipInstruction = getSkipInstruction(this);
     }
 
     public long getId() {
@@ -54,7 +51,7 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     public boolean isSimple() {
-        return isSimpleType;
+        return simple;
     }
 
     public boolean isPrimitive() {
@@ -91,6 +88,56 @@ public final class MetadataClass extends AbstractMetadataElement {
 
     public Set<String> getFieldNames() {
         return fieldMap.keySet();
+    }
+
+    public void skip(RecordingStream stream) throws IOException {
+        skipInstruction.accept(stream);
+    }
+
+    private static boolean isPrimitive(String typeName) {
+        return typeName.equals("byte") ||
+                typeName.equals("short") ||
+                typeName.equals("char") ||
+                typeName.equals("int") ||
+                typeName.equals("long") ||
+                typeName.equals("float") ||
+                typeName.equals("double") ||
+                typeName.equals("boolean") ||
+                typeName.equals("java.lang.String");
+    }
+
+    private static ExceptionalConsumer<RecordingStream, IOException> getSkipInstruction(MetadataClass typeDescriptor) {
+        switch (typeDescriptor.getName()) {
+            case "byte", "boolean": {
+                return RecordingStream::read;
+            }
+            case "short", "char", "int", "long": {
+                return RecordingStream::readVarint;
+            }
+            case "float": {
+                return RecordingStream::readFloat;
+            }
+            case "double": {
+                return RecordingStream::readDouble;
+            }
+            case "java.lang.String":
+                return ParsingUtils::skipUTF8;
+            default: {
+                if (typeDescriptor.getFields().size() == 1) {
+                    return stream -> {
+                        MetadataClass fieldType = typeDescriptor.getFields().getFirst().getType();
+                        fieldType.skip(stream);
+                    };
+                }
+                List<MetadataField> fields = typeDescriptor.getFields();
+                return stream -> {
+                    for (int i = 0; i < fields.size(); i++) {
+                        MetadataField fld = fields.get(i);
+                        ValueLoader.skip(stream, fld.getType(), fld.getDimension() > 0, fld.hasConstantPool());
+                    }
+                };
+            }
+        }
     }
 
     @Override
