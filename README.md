@@ -19,10 +19,7 @@ but to be fair it is trying to print the full content of each event.
 After the project is build via `./gradlew shadowJar` you can run the demo app with:
 ```shell
 # The Jafar parser
-java -cp build/libs/jafar-all.jar io.jafar.demo.Main path_to_jfr.jfr
-
-# The JMC parser
-java -cp build/libs/jafar-all.jar io.jafar.demo.MainJMC path_to_jfr.jfr
+java -jar demo/build/libs/demo-all.jar [jafar|jmc|jfr] path_to_jfr.jfr
 ```
 
 ## Usage

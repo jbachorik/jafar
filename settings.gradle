@@ -8,3 +8,5 @@
  */
 
 rootProject.name = 'jafar'
+include ':parser'
+include ':demo'
