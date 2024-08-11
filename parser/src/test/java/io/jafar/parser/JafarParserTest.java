@@ -58,58 +58,58 @@ public class JafarParserTest {
     @Test
     void testRealFile() throws Exception {
         // TODO commented out until LFS is enabled for the GH project
-//        JafarParser p = JafarParser.open(Paths.get("/tmp/recording.jfr").toString());
-//        AtomicLong eventCount = new AtomicLong(0);
-//        HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
-//            assertNotNull(event.eventThread());
-//            assertNotNull(event.stackTrace());
-//            eventCount.incrementAndGet();
-//        });
-//
-//        // warmup
-//        long ts = System.nanoTime();
-//        p.run();
-//        System.out.println("=== cold access: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//
-//        assertTrue(eventCount.get() > 0);
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed up access[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        var h2 = p.handle(ThreadEndEvent.class, (event, ctl) -> {
-//            eventCount.incrementAndGet();
-//            assertNotNull(event.thread().javaName());
-//        });
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with two handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        h2.destroy(p);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with first handler[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        h1.destroy(p);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with no handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
+        JafarParser p = JafarParser.open(Paths.get("/tmp/main.jfr").toString());
+        AtomicLong eventCount = new AtomicLong(0);
+        HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
+            assertNotNull(event.eventThread());
+            assertNotNull(event.stackTrace());
+            eventCount.incrementAndGet();
+        });
+
+        // warmup
+        long ts = System.nanoTime();
+        p.run();
+        System.out.println("=== cold access: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
+
+        assertTrue(eventCount.get() > 0);
+        System.out.println("=== event: " + eventCount.get());
+
+        eventCount.set(0);
+        for (int i = 0; i < 100; i++) {
+            ts = System.nanoTime();
+            p.run();
+            System.out.println("=== warmed up access[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
+        }
+        System.out.println("=== event: " + eventCount.get());
+
+        eventCount.set(0);
+        var h2 = p.handle(ThreadEndEvent.class, (event, ctl) -> {
+            eventCount.incrementAndGet();
+            assertNotNull(event.thread().javaName());
+        });
+        for (int i = 0; i < 100; i++) {
+            ts = System.nanoTime();
+            p.run();
+            System.out.println("=== warmed with two handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
+        }
+        System.out.println("=== event: " + eventCount.get());
+
+        eventCount.set(0);
+        h2.destroy(p);
+        for (int i = 0; i < 100; i++) {
+            ts = System.nanoTime();
+            p.run();
+            System.out.println("=== warmed with first handler[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
+        }
+        System.out.println("=== event: " + eventCount.get());
+
+        eventCount.set(0);
+        h1.destroy(p);
+        for (int i = 0; i < 100; i++) {
+            ts = System.nanoTime();
+            p.run();
+            System.out.println("=== warmed with no handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
+        }
+        System.out.println("=== event: " + eventCount.get());
     }
 }

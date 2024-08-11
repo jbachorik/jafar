@@ -3,6 +3,7 @@ package io.jafar.parser;
 import io.jafar.parser.internal_api.ConstantPool;
 import io.jafar.parser.internal_api.ConstantPools;
 import io.jafar.parser.internal_api.MetadataLookup;
+import io.jafar.parser.internal_api.RecordingStream;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
@@ -20,7 +21,11 @@ public final class MutableConstantPools implements ConstantPools {
 
     @Override
     public MutableConstantPool getConstantPool(long typeId) {
-        return poolMap.computeIfAbsent(typeId, k -> new MutableConstantPool(metadata, k));
+        return poolMap.get(typeId);
+    }
+
+    public MutableConstantPool addOrGetConstantPool(RecordingStream chunkStream, long typeId) {
+        return poolMap.computeIfAbsent(typeId, k -> new MutableConstantPool(chunkStream, k));
     }
 
     @Override
