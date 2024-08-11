@@ -124,8 +124,12 @@ public final class MetadataClass extends AbstractMetadataElement {
                 return ParsingUtils::skipUTF8;
             default: {
                 if (typeDescriptor.getFields().size() == 1) {
+                    MetadataField field = typeDescriptor.getFields().getFirst();
+                    if (field.hasConstantPool()) {
+                        return RecordingStream::readVarint;
+                    }
                     return stream -> {
-                        MetadataClass fieldType = typeDescriptor.getFields().getFirst().getType();
+                        MetadataClass fieldType = field.getType();
                         fieldType.skip(stream);
                     };
                 }

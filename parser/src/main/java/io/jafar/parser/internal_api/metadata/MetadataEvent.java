@@ -59,9 +59,6 @@ public final class MetadataEvent extends AbstractEvent {
       // get the element name
       int stringPtr = (int) stream.readVarint();
       String typeId = stream.getContext().getMetadataLookup().getString(stringPtr);
-      if (stream.getContext().getChunkIndex() == 3) {
-        System.out.println("===> " + typeId);
-      }
       AbstractMetadataElement element = switch (typeId) {
         case "class" -> new MetadataClass(stream, this::readElement);
         case "field" -> new MetadataField(stream, this::readElement, forceConstantPools);
