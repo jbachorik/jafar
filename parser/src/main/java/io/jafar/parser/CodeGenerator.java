@@ -26,25 +26,25 @@ final class CodeGenerator {
         }
         if (clz == int.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Integer.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Integer.class), "intValue", Type.getMethodDescriptor(Type.INT_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Integer.class), "intValue", Type.getMethodDescriptor(Type.INT_TYPE), false);
         } else if (clz == long.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Long.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Long.class), "longValue", Type.getMethodDescriptor(Type.LONG_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Long.class), "longValue", Type.getMethodDescriptor(Type.LONG_TYPE), false);
         } else if (clz == short.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Short.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Short.class), "shortValue", Type.getMethodDescriptor(Type.SHORT_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Short.class), "shortValue", Type.getMethodDescriptor(Type.SHORT_TYPE), false);
         } else if (clz == char.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Character.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Character.class), "charValue", Type.getMethodDescriptor(Type.CHAR_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Character.class), "charValue", Type.getMethodDescriptor(Type.CHAR_TYPE), false);
         } else if (clz == byte.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Byte.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Byte.class), "byteValue", Type.getMethodDescriptor(Type.BYTE_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Byte.class), "byteValue", Type.getMethodDescriptor(Type.BYTE_TYPE), false);
         } else if (clz == double.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Double.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Double.class), "doubleValue", Type.getMethodDescriptor(Type.DOUBLE_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Double.class), "doubleValue", Type.getMethodDescriptor(Type.DOUBLE_TYPE), false);
         } else if (clz == float.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Float.class));
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Float.class), "floatValue", Type.getMethodDescriptor(Type.FLOAT_TYPE));
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Float.class), "floatValue", Type.getMethodDescriptor(Type.FLOAT_TYPE), false);
         } else if (clz == boolean.class) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(Boolean.class));
             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Boolean.class), "booleanValue", Type.getMethodDescriptor(Type.BOOLEAN_TYPE), false);
@@ -62,6 +62,13 @@ final class CodeGenerator {
     }
 
     static void handleFieldRef(ClassVisitor cv, String clzName, MetadataField field, Class<?> fldType, String fldRefName, String methodName) {
+        // generate the cache-per-field fields
+        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, fldRefName + "_cls", Type.getDescriptor(MetadataClass.class), null, null).visitEnd();
+        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, fldRefName + "_hdl", Type.getDescriptor(DeserializationHandler.class), null, null).visitEnd();
+        if (fldType == null) {
+            // field is never accessed directly, can skip the rest
+            return;
+        }
         boolean isArray = field.getDimension() > 0;
         cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, fldRefName, (isArray ? "[" : "") + "J", null, null).visitEnd();
         MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, methodName, "()" + (isArray ? "[" : "") + Type.getDescriptor(fldType), null, null);
@@ -115,6 +122,14 @@ final class CodeGenerator {
     }
 
     static void handleField(ClassVisitor cv, String clzName, MetadataField field, Class<?> fldType, String fieldName, String methodName) {
+        // generate the cache-per-field fields
+        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, fieldName + "_cls", Type.getDescriptor(MetadataClass.class), null, null).visitEnd();
+        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, fieldName + "_hdl", Type.getDescriptor(DeserializationHandler.class), null, null).visitEnd();
+        if (fldType == null) {
+            // field is never accessed directly, can skip the rest
+            return;
+        }
+
         boolean isArray = field.getDimension() > 0;
         String fldDescriptor = (isArray ? "[" : "") + Type.getDescriptor(fldType);
         cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, fieldName, fldDescriptor, null, null).visitEnd();
@@ -160,9 +175,17 @@ final class CodeGenerator {
                 // skip
                 addLog(mv, "Skipping field: " + fld.getName());
                 mv.visitVarInsn(Opcodes.ALOAD, 1); // [stream]
+                mv.visitFieldInsn(Opcodes.GETSTATIC, clzName.replace('.', '/'), fld.getName() + (fld.hasConstantPool() ? "_ref" : "") + "_cls", Type.getDescriptor(MetadataClass.class)); // [stream, cls]
+                mv.visitInsn(Opcodes.DUP); // [stream, cls, cls]
+                Label l1 = new Label();
+                mv.visitJumpInsn(Opcodes.IFNONNULL, l1); // [stream, cls]
+                mv.visitInsn(Opcodes.POP); // [stream]
                 mv.visitVarInsn(Opcodes.ALOAD, meteadataIdx); // [stream, metadata]
                 mv.visitLdcInsn(fld.getTypeId()); // [stream, metadata, long, long]
                 mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(MetadataLookup.class), "getClass", Type.getMethodDescriptor(Type.getType(MetadataClass.class), Type.LONG_TYPE), true); // [stream, metadata, class]
+                mv.visitInsn(Opcodes.DUP); // [stream, metadata, class, class]
+                mv.visitFieldInsn(Opcodes.PUTSTATIC, clzName.replace('.', '/'), fld.getName() + (fld.hasConstantPool() ? "_ref" : "") + "_cls", Type.getDescriptor(MetadataClass.class)); // [stream, metadata, class]
+                mv.visitLabel(l1);
                 mv.visitLdcInsn(fld.getDimension() > 0 ? 1 : 0); // [stream, metadata, class, boolean]
                 mv.visitLdcInsn(withConstantPool ? 1 : 0); // [stream, metadata, class, boolean, boolean]
                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(ValueLoader.class), "skip", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(RecordingStream.class), Type.getType(MetadataClass.class), Type.BOOLEAN_TYPE, Type.BOOLEAN_TYPE), false); // []
@@ -231,9 +254,17 @@ final class CodeGenerator {
                     mv.visitJumpInsn(Opcodes.IF_ICMPEQ, l2); // [this, array]
                     mv.visitInsn(Opcodes.DUP); // [this, array, array]
                     mv.visitVarInsn(Opcodes.ILOAD, arrayCounterIdx); // [this, array, array, int]
+                    mv.visitFieldInsn(Opcodes.GETSTATIC, clzName.replace('.', '/'), fld.getName() + "_hdl", Type.getDescriptor(DeserializationHandler.class)); // [this, array, array, int, deserializer]
+                    mv.visitInsn(Opcodes.DUP); // [this, array, array, int, deserializer, deserializer]
+                    Label l1_1 = new Label();
+                    mv.visitJumpInsn(Opcodes.IFNONNULL, l1_1); // [this, array, array, int, deserializer]
+                    mv.visitInsn(Opcodes.POP); // [this, array, array, int]
                     mv.visitVarInsn(Opcodes.ALOAD, deserializersIdx); // [this, array, array, int, deserializers]
                     mv.visitLdcInsn(fld.getType().getName()); // [this, array, array, int, deserializers, name]
                     mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Deserializers.class), "getDeserializer", Type.getMethodDescriptor(Type.getType(DeserializationHandler.class), Type.getType(String.class)), false); // [this, array, array, int, deserializer]
+                    mv.visitInsn(Opcodes.DUP); // [this, array, array, int, deserializer, deserializer]
+                    mv.visitFieldInsn(Opcodes.PUTSTATIC, clzName.replace('.', '/'), fld.getName() + "_hdl", Type.getDescriptor(DeserializationHandler.class)); // [this, array, array, int, deserializer]
+                    mv.visitLabel(l1_1);
                     mv.visitVarInsn(Opcodes.ALOAD, 1); // [this, array, array, int, deserializer, stream]
                     mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(DeserializationHandler.class), "handle", Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(RecordingStream.class)), true); // [this, array, array, int, obj]
                     mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(fldClz)); // [this, array, array, int, fldval]
@@ -245,10 +276,18 @@ final class CodeGenerator {
                 } else {
                     addLog(mv, "Reading field: " + fld.getName() + ":" + fld.getType().getName());
                     mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
+                    Label l1 = new Label();
+                    mv.visitFieldInsn(Opcodes.GETSTATIC, clzName.replace('.', '/'), fld.getName() + "_hdl", Type.getDescriptor(DeserializationHandler.class)); // [this, deserializer]
+                    mv.visitInsn(Opcodes.DUP); // [this, deserializer, deserializer]
+                    mv.visitJumpInsn(Opcodes.IFNONNULL, l1); // [this, deserializer]
+                    mv.visitInsn(Opcodes.POP); // [this]
                     mv.visitVarInsn(Opcodes.ALOAD, deserializersIdx); // [this, deserializers]
                     mv.visitLdcInsn(fld.getType().getName()); // [this, deserializers, nameg]
                     mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(Deserializers.class), "getDeserializer", Type.getMethodDescriptor(Type.getType(DeserializationHandler.class), Type.getType(String.class)), false); // [this, deserializer]
                     addLog(mv, "Got deserializers for " + fld.getType().getName());
+                    mv.visitInsn(Opcodes.DUP); // [this, deserializer, deserializer]
+                    mv.visitFieldInsn(Opcodes.PUTSTATIC, clzName.replace('.', '/'), fld.getName() + "_hdl", Type.getDescriptor(DeserializationHandler.class)); // [this, deserializer]
+                    mv.visitLabel(l1);
                     mv.visitVarInsn(Opcodes.ALOAD, 1); // [this, deserializer, stream]
                     mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(DeserializationHandler.class), "handle", Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(RecordingStream.class)), true); // [this, obj]
                     addLog(mv, "Got deserializer");

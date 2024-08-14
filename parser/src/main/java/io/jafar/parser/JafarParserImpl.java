@@ -219,10 +219,9 @@ public final class JafarParserImpl implements JafarParser {
                     for (MetadataField field : current.getFields()) {
                         String fieldName = field.getName();
                         allFields.add(field);
-                        if (!usedAttributes.contains(fieldName)) {
-                            continue;
+                        if (usedAttributes.contains(fieldName)) {
+                            appliedFields.add(field);
                         }
-                        appliedFields.add(field);
 
                         Class<?> fldClz = typeClassMap.get(field.getType().getId());
                         boolean withConstantPool = field.hasConstantPool();
@@ -296,6 +295,7 @@ public final class JafarParserImpl implements JafarParser {
             public boolean onMetadata(MetadataEvent metadata) {
                 Long2ObjectMap<Class<?>> typeClassMap = typeClassMapRef.get();
 
+                System.out.println("===> chunk: " + metadata.getContext().getChunkIndex() + ", metadata: " + metadata.metadataId + ", " + metadata.size + ", from: " + metadata.startTime + ", duration: " + metadata.duration);
                 Deserializers deserializers = metadata.getContext().getDeserializers();
                 // typeClassMap must be fully intialized before trying to resolve/generate the handlers
                 for (MetadataClass clz : metadata.getClasses()) {
