@@ -100,23 +100,26 @@ public final class RecordingStream implements AutoCloseable {
     }
   }
 
+  private long readFullLong() {
+    int offset = 8 - delegate.remaining();
+    if (offset > 0) {
+      position(delegate.position() - offset);
+      return (delegate.getLong() & (0xffffffffffffffffL << offset * 8)) << offset * 8;
+    } else {
+      return delegate.getLong();
+    }
+  }
+
   public long readVarint() throws IOException {
     try {
-      // TODO can optimise this
-      long value = 0;
-      int readValue = 0;
-      int i = 0;
-      do {
-        readValue = delegate.get();
-        value |= (long) (readValue & 0x7F) << (7 * i);
-        i++;
-      } while ((readValue & 0x80) != 0
-          // In fact a fully LEB128 encoded 64bit number could take up to 10 bytes
-          // (in order to store 64 bit original value using 7bit slots we need at most 10 of them).
-          // However, eg. JMC parser will stop at 9 bytes, assuming that the compressed number is
-          // a Java unsigned long (therefore having only 63 bits and they all fit in 9 bytes).
-          && i < 9);
-      return value;
+      int result = 0;
+      for (int shift = 0; ; shift += 7) {
+        byte b = delegate.get();
+        result |= (b & 0x7f) << shift;
+        if (b >= 0) {
+          return result;
+        }
+      }
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
