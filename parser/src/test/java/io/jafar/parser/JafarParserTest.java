@@ -58,6 +58,7 @@ public class JafarParserTest {
     @Test
     void testRealFile() throws Exception {
         // TODO commented out until LFS is enabled for the GH project
+//        JafarParser p = JafarParser.open(Paths.get("/Users/jaroslav.bachorik/Downloads/test-jfr.jfr").toString());
         JafarParser p = JafarParser.open(Paths.get("/Users/jaroslav.bachorik/Downloads/test-ap.jfr").toString());
         AtomicLong eventCount = new AtomicLong(0);
         HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {

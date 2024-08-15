@@ -33,6 +33,8 @@ import java.lang.invoke.MethodType;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -359,7 +361,10 @@ public final class JafarParserImpl implements JafarParser {
     private static ByteBuffer openJfrStream(Path jfrFile) {
         try (RandomAccessFile raf = new RandomAccessFile(jfrFile.toFile(), "r");
              FileChannel channel = raf.getChannel()) {
-            return channel.map(FileChannel.MapMode.READ_ONLY, 0, raf.length());
+            MappedByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, raf.length());
+            buf.order(ByteOrder.BIG_ENDIAN);
+            buf.load();
+            return buf;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

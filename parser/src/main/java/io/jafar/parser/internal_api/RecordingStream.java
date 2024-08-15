@@ -111,18 +111,48 @@ public final class RecordingStream implements AutoCloseable {
   }
 
   public long readVarint() throws IOException {
-    try {
-      int result = 0;
-      for (int shift = 0; ; shift += 7) {
-        byte b = delegate.get();
-        result |= (b & 0x7f) << shift;
-        if (b >= 0) {
-          return result;
-        }
-      }
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
+    byte b0 = delegate.get();
+    long ret = (b0 & 0x7FL);
+    if (b0 >= 0) {
+      return ret;
     }
+    int b1 = delegate.get();
+    ret += (b1 & 0x7FL) << 7;
+    if (b1 >= 0) {
+      return ret;
+    }
+    int b2 = delegate.get();
+    ret += (b2 & 0x7FL) << 14;
+    if (b2 >= 0) {
+      return ret;
+    }
+    int b3 = delegate.get();
+    ret += (b3 & 0x7FL) << 21;
+    if (b3 >= 0) {
+      return ret;
+    }
+    int b4 = delegate.get();
+    ret += (b4 & 0x7FL) << 28;
+    if (b4 >= 0) {
+      return ret;
+    }
+    int b5 = delegate.get();
+    ret += (b5 & 0x7FL) << 35;
+    if (b5 >= 0) {
+      return ret;
+    }
+    int b6 = delegate.get();
+    ret += (b6 & 0x7FL) << 42;
+    if (b6 >= 0) {
+      return ret;
+    }
+    int b7 = delegate.get();
+    ret += (b7 & 0x7FL) << 49;
+    if (b7 >= 0) {
+      return ret;
+    }
+    int b8 = delegate.get();// read last byte raw
+    return ret + (((long) (b8 & 0XFF)) << 56);
   }
 
   public boolean readBoolean() throws IOException {

@@ -11,6 +11,7 @@ public final class MetadataField extends AbstractMetadataElement {
     private final long classId;
     private final boolean hasConstantPool;
     private final int dimension;
+    private MetadataClass type = null;
 
     MetadataField(RecordingStream stream, ElementReader reader, boolean forceConstantPools) throws IOException {
         super(stream, MetadataElementKind.FIELD);
@@ -22,7 +23,12 @@ public final class MetadataField extends AbstractMetadataElement {
     }
 
     public MetadataClass getType() {
-        return metadataLookup.getClass(classId);
+        // all events from a single chunk, referencing a particular type will be procesed in a single thread
+        // therefore, we are not risiking data race here
+        if (type == null) {
+            type = metadataLookup.getClass(classId);
+        }
+        return type;
     }
 
     public long getTypeId() {

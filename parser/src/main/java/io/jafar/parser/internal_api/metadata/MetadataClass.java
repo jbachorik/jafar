@@ -133,11 +133,18 @@ public final class MetadataClass extends AbstractMetadataElement {
                         fieldType.skip(stream);
                     };
                 }
-                List<MetadataField> fields = typeDescriptor.getFields();
+                MetadataField[] fields = typeDescriptor.getFields().toArray(new MetadataField[0]);
+                boolean[] isArrayFlags = new boolean[fields.length];
+                boolean[] hasConstantPoolFlags = new boolean[fields.length];
+                int i = 0;
+                for (MetadataField field : typeDescriptor.getFields()) {
+                    isArrayFlags[i] = field.getDimension() > 0;
+                    hasConstantPoolFlags[i] = field.hasConstantPool();
+                    i++;
+                }
                 return stream -> {
-                    for (int i = 0; i < fields.size(); i++) {
-                        MetadataField fld = fields.get(i);
-                        ValueLoader.skip(stream, fld.getType(), fld.getDimension() > 0, fld.hasConstantPool());
+                    for (int f = 0; f < fields.length; f++) {
+                        ValueLoader.skip(stream, fields[f].getType(), isArrayFlags[f], hasConstantPoolFlags[f]);
                     }
                 };
             }
