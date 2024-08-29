@@ -65,6 +65,11 @@ public abstract class AbstractMetadataElement {
         return name;
     }
 
+    public String getSimpleName() {
+        int idx = name.lastIndexOf('.');
+        return idx == -1 ? name : name.substring(idx + 1);
+    }
+
     public MetadataElementKind getKind() {
         return kind;
     }

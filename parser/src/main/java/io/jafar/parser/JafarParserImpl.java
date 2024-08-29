@@ -51,10 +51,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class JafarParserImpl implements JafarParser {
+    private record Handlers(MethodHandle ctr, MethodHandle skip) {}
+
     private final class HandlerRegistrationImpl<T> implements HandlerRegistration<T> {
-        private final WeakReference<Class<T>> clzRef;
+        private final WeakReference<Class<?>> clzRef;
         private final WeakReference<JafarParser> cookieRef;
-        HandlerRegistrationImpl(Class<T> clz, JafarParser cookie) {
+        HandlerRegistrationImpl(Class<?> clz, JafarParser cookie) {
             this.clzRef = new WeakReference<>(clz);
             this.cookieRef = new WeakReference<>(cookie);
         }
@@ -84,7 +86,8 @@ public final class JafarParserImpl implements JafarParser {
     private final Int2ObjectMap<Map<Class<?>, MethodHandle>> chunkHandlerMethodMap = new Int2ObjectOpenHashMap<>();
 
     private final ThreadLocal<Long2ObjectMap<Class<?>>> typeClassMapRef = new ThreadLocal<>();
-    private final ThreadLocal<Map<Class<?>, MethodHandle>> handlerMethodMapRef = new ThreadLocal<>();
+    private final ThreadLocal<Map<Class<?>, MethodHandle>> deserializerMethodMapRef = new ThreadLocal<>();
+    private final ThreadLocal<Map<MetadataClass, MethodHandle>> skipperMethodMapRef = ThreadLocal.withInitial(HashMap::new);
 
     private boolean closed = false;
 
@@ -162,48 +165,36 @@ public final class JafarParserImpl implements JafarParser {
         return usedAttributes;
     }
 
-    private MethodHandle getHandlerMethod(int chunk, MetadataClass mdClass, Class<?> clz, Long2ObjectMap<Class<?>> typeClassMap) {
-        Map<Class<?>, MethodHandle> handlerMethodMap = handlerMethodMapRef.get();
+    private Handlers getHandlerMethods(int chunk, MetadataClass mdClass, Class<?> clz, Long2ObjectMap<Class<?>> typeClassMap) {
+        Map<Class<?>, MethodHandle> deserializerMethodMap = deserializerMethodMapRef.get();
+        Map<MetadataClass, MethodHandle> skipperMethodMap = skipperMethodMapRef.get();
 
         Map<String, String> fieldToMethodMap = new HashMap<>();
-        MethodHandle mh = handlerMethodMap.get(clz);
-        if (mh != null) {
-            return mh;
+        MethodHandle deserializer = clz != null ? deserializerMethodMap.get(clz) : null;
+        MethodHandle skipper = skipperMethodMap.get(mdClass);
+
+        if (deserializer != null || skipper != null) {
+            return new Handlers(deserializer, skipper);
         }
+        MethodHandle ctrHandle;
+        MethodHandle skipHandle;
         try {
-            if (clz == int.class || clz == Integer.class) {
-                mh = MethodHandles.explicitCastArguments(MethodHandles.lookup().findVirtual(RecordingStream.class, "readVarint", MethodType.methodType(long.class)), MethodType.methodType(int.class, RecordingStream.class));
-            } else if (clz == long.class || clz == Long.class) {
-                mh = MethodHandles.lookup().findVirtual(RecordingStream.class, "readVarint", MethodType.methodType(long.class));
-            } else if (clz == short.class || clz == Short.class) {
-                mh = MethodHandles.explicitCastArguments(MethodHandles.lookup().findVirtual(RecordingStream.class, "readVarint", MethodType.methodType(long.class)), MethodType.methodType(short.class));
-            } else if (clz == char.class || clz == Character.class) {
-                mh = MethodHandles.explicitCastArguments(MethodHandles.lookup().findVirtual(RecordingStream.class, "readVarint", MethodType.methodType(long.class)), MethodType.methodType(char.class));
-            } else if (clz == byte.class || clz == Byte.class) {
-                mh = MethodHandles.explicitCastArguments(MethodHandles.lookup().findVirtual(RecordingStream.class, "readVarint", MethodType.methodType(long.class)), MethodType.methodType(byte.class));
-            } else if (clz == double.class || clz == Double.class) {
-                mh = MethodHandles.lookup().findVirtual(RecordingStream.class, "readDouble", MethodType.methodType(double.class));
-            } else if (clz == float.class || clz == Float.class) {
-                mh = MethodHandles.lookup().findVirtual(RecordingStream.class, "readFloat", MethodType.methodType(float.class));
-            } else if (clz == boolean.class || clz == Boolean.class) {
-                mh = MethodHandles.lookup().findVirtual(RecordingStream.class, "readBoolean", MethodType.methodType(boolean.class));
-            } else if (clz == String.class) {
-                mh = MethodHandles.lookup().findStatic(ParsingUtils.class, "readUTF8", MethodType.methodType(String.class, RecordingStream.class));
-            } else {
-                if (!clz.isInterface()) {
-                    throw new RuntimeException("Unsupported type: " + clz.getName());
-                }
-                String clzName = JafarParserImpl.class.getPackage().getName() + "." + clz.getSimpleName() + "$" + chunk;
-                // generate handler class
-                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-                cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, clzName.replace('.', '/'), null, "java/lang/Object", new String[]{clz.getName().replace('.', '/')});
-                cw.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, "context", Type.getDescriptor(ParserContext.class), null, null).visitEnd();
+            if (clz != null && !clz.isInterface()) {
+                throw new RuntimeException("Unsupported type: " + clz.getName());
+            }
+            String origClzName = clz != null ? clz.getName() : mdClass.getName();
+            String origSimpleName = clz != null ? clz.getSimpleName() : mdClass.getSimpleName();
+            String clzName = JafarParserImpl.class.getPackage().getName() + "." + (clz != null ? clz.getSimpleName() : mdClass.getSimpleName()) + "$" + chunk;
+            // generate handler class
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+            cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, clzName.replace('.', '/'), null, "java/lang/Object", clz != null ? new String[]{origClzName.replace('.', '/')} : null);
+            cw.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, "context", Type.getDescriptor(ParserContext.class), null, null).visitEnd();
 
-                Set<String> usedAttributes = collectUsedAttributes(clz, fieldToMethodMap);
+            Set<String> usedAttributes = collectUsedAttributes(clz, fieldToMethodMap);
 
-                Deque<MetadataClass> stack = new ArrayDeque<>();
-                stack.push(mdClass);
-                // TODO ignore inheritence for now
+            Deque<MetadataClass> stack = new ArrayDeque<>();
+            stack.push(mdClass);
+            // TODO ignore inheritence for now
 //                        while (true) {
 //                            MetadataClass superMd = context.getMetadataLookup().;
 //                            String superName = mdClass.getSuperType();
@@ -214,10 +205,11 @@ public final class JafarParserImpl implements JafarParser {
 //                            }
 //                        }
 
-                List<MetadataField> allFields = new ArrayList<>();
-                Set<MetadataField> appliedFields = new HashSet<>();
-                while (!stack.isEmpty()) {
-                    MetadataClass current = stack.pop();
+            List<MetadataField> allFields = new ArrayList<>();
+            Set<MetadataField> appliedFields = new HashSet<>();
+            while (!stack.isEmpty()) {
+                MetadataClass current = stack.pop();
+                if (clz != null) {
                     for (MetadataField field : current.getFields()) {
                         String fieldName = field.getName();
                         allFields.add(field);
@@ -237,19 +229,24 @@ public final class JafarParserImpl implements JafarParser {
                             CodeGenerator.handleField(cw, clzName, field, fldClz, fieldName, methodName);
                         }
                     }
+
                     CodeGenerator.prepareConstructor(cw, clzName, current, allFields, appliedFields, typeClassMap);
                 }
-                cw.visitEnd();
-                byte[] classData = cw.toByteArray();
-
-                Files.write(Paths.get("/tmp/"+ clz.getSimpleName() + ".class"), classData);
-
-                MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
-                mh = lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class));
+                CodeGenerator.prepareSkipHandler(cw, current);;
             }
-            return mh;
+            cw.visitEnd();
+            byte[] classData = cw.toByteArray();
+
+            Files.write(Paths.get("/tmp/"+ origSimpleName + ".class"), classData);
+
+            MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
+            ctrHandle = clz != null ? lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class)) : null;
+            skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
+            deserializerMethodMap.put(clz, ctrHandle);
+            skipperMethodMap.put(mdClass, skipHandle);
+            return new Handlers(ctrHandle, skipHandle);
         } catch (Throwable t) {
-            throw new RuntimeException(t);
+            throw new RuntimeException("Failed to resolve handler method for " + mdClass.getName(), t);
         }
     }
 
@@ -274,7 +271,7 @@ public final class JafarParserImpl implements JafarParser {
                 if (!globalDeserializerMap.isEmpty()) {
                     synchronized (this) {
                         typeClassMapRef.set(chunkTypeClassMap.computeIfAbsent(chunkIndex, k -> new Long2ObjectOpenHashMap<>()));
-                        handlerMethodMapRef.set(chunkHandlerMethodMap.computeIfAbsent(chunkIndex, k -> new HashMap<>()));
+                        deserializerMethodMapRef.set(chunkHandlerMethodMap.computeIfAbsent(chunkIndex, k -> new HashMap<>()));
 
                         Deserializers target = context.getDeserializers();
                         for (Map.Entry<String, JFRValueDeserializer<?>> e : globalDeserializerMap.entrySet()) {
@@ -289,7 +286,7 @@ public final class JafarParserImpl implements JafarParser {
             @Override
             public boolean onChunkEnd(int chunkIndex, boolean skipped) {
                 typeClassMapRef.remove();
-                handlerMethodMapRef.remove();
+                deserializerMethodMapRef.remove();
                 return true;
             }
 
@@ -297,7 +294,6 @@ public final class JafarParserImpl implements JafarParser {
             public boolean onMetadata(MetadataEvent metadata) {
                 Long2ObjectMap<Class<?>> typeClassMap = typeClassMapRef.get();
 
-                System.out.println("===> chunk: " + metadata.getContext().getChunkIndex() + ", metadata: " + metadata.metadataId + ", " + metadata.size + ", from: " + metadata.startTime + ", duration: " + metadata.duration);
                 Deserializers deserializers = metadata.getContext().getDeserializers();
                 // typeClassMap must be fully intialized before trying to resolve/generate the handlers
                 for (MetadataClass clz : metadata.getClasses()) {
@@ -307,10 +303,17 @@ public final class JafarParserImpl implements JafarParser {
                     }
                 }
                 for (MetadataClass clz : metadata.getClasses()) {
-                    JFRValueDeserializer<?> deserializer = (JFRValueDeserializer<?>) deserializers.getDeserializer(clz.getName());
-                    if (deserializer != null) {
-                        deserializer.setHandler(getHandlerMethod(metadata.getContext().getChunkIndex(), clz, deserializer.getClazz(), typeClassMap));
+                    if (clz.isPrimitive() || (clz.getSuperType() != null && clz.getSuperType().contains("Annotation"))) {
+                        continue;
                     }
+                    JFRValueDeserializer<?> deserializer = (JFRValueDeserializer<?>) deserializers.getDeserializer(clz.getName());
+                    // TODO: Perhaps put deserializer/skipper to MetadataClass ?
+                    Handlers handlers = getHandlerMethods(metadata.getContext().getChunkIndex(), clz, deserializer != null ? deserializer.getClazz() : null, typeClassMap);
+                    if (deserializer != null) {
+                        deserializer.setHandler(handlers.ctr());
+                    }
+                    clz.setSkipHandler(handlers.skip());
+//                    System.out.println("===> Resolved handlers for " + clz.getName() + "(" + clz + ") :: " + handlers);
                 }
 
                 return true;

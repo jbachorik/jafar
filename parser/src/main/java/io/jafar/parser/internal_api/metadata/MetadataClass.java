@@ -5,6 +5,9 @@ import io.jafar.parser.ValueLoader;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,7 +29,9 @@ public final class MetadataClass extends AbstractMetadataElement {
     private final boolean isPrimitive;
     private final boolean simple;
 
-    final ExceptionalConsumer<RecordingStream, IOException> skipInstruction;
+    private final int associatedChunk;
+
+    private volatile MethodHandle skipHandler;
 
     MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.CLASS);
@@ -35,11 +40,18 @@ public final class MetadataClass extends AbstractMetadataElement {
         this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
         this.isPrimitive = primitiveTypeNames.contains(getName());
         this.simple = isSimpleType || isPrimitive(name);
+        this.associatedChunk = stream.getContext().getChunkIndex();
         metadataLookup.addClass(id, this);
         resetAttributes();
         readSubelements(reader);
-        // must be the last instruction such that all fields are resolved
-        this.skipInstruction = getSkipInstruction(this);
+        if (getName().equals("java.lang.String")) {
+            try {
+                skipHandler = MethodHandles.lookup().findStatic(ParsingUtils.class, "skipUTF8", MethodType.methodType(void.class, RecordingStream.class));
+            } catch (Throwable t) {
+                // should never happen unless the method name or signature changes
+                throw new RuntimeException(t);
+            }
+        }
     }
 
     public long getId() {
@@ -56,6 +68,10 @@ public final class MetadataClass extends AbstractMetadataElement {
 
     public boolean isPrimitive() {
         return isPrimitive;
+    }
+
+    public void setSkipHandler(MethodHandle handler) {
+        this.skipHandler = handler;
     }
 
     protected void onSubelement(AbstractMetadataElement element) {
@@ -91,7 +107,11 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     public void skip(RecordingStream stream) throws IOException {
-        skipInstruction.accept(stream);
+        try {
+            skipHandler.invokeExact(stream);
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
     }
 
     private static boolean isPrimitive(String typeName) {
@@ -106,68 +126,24 @@ public final class MetadataClass extends AbstractMetadataElement {
                 typeName.equals("java.lang.String");
     }
 
-    private static ExceptionalConsumer<RecordingStream, IOException> getSkipInstruction(MetadataClass typeDescriptor) {
-        switch (typeDescriptor.getName()) {
-            case "byte", "boolean": {
-                return RecordingStream::read;
-            }
-            case "short", "char", "int", "long": {
-                return RecordingStream::readVarint;
-            }
-            case "float": {
-                return RecordingStream::readFloat;
-            }
-            case "double": {
-                return RecordingStream::readDouble;
-            }
-            case "java.lang.String":
-                return ParsingUtils::skipUTF8;
-            default: {
-                if (typeDescriptor.getFields().size() == 1) {
-                    MetadataField field = typeDescriptor.getFields().getFirst();
-                    if (field.hasConstantPool()) {
-                        return RecordingStream::readVarint;
-                    }
-                    return stream -> {
-                        MetadataClass fieldType = field.getType();
-                        fieldType.skip(stream);
-                    };
-                }
-                MetadataField[] fields = typeDescriptor.getFields().toArray(new MetadataField[0]);
-                boolean[] isArrayFlags = new boolean[fields.length];
-                boolean[] hasConstantPoolFlags = new boolean[fields.length];
-                int i = 0;
-                for (MetadataField field : typeDescriptor.getFields()) {
-                    isArrayFlags[i] = field.getDimension() > 0;
-                    hasConstantPoolFlags[i] = field.hasConstantPool();
-                    i++;
-                }
-                return stream -> {
-                    for (int f = 0; f < fields.length; f++) {
-                        ValueLoader.skip(stream, fields[f].getType(), isArrayFlags[f], hasConstantPoolFlags[f]);
-                    }
-                };
-            }
-        }
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MetadataClass that = (MetadataClass) o;
-        return id == that.id && name.equals(that.name);
+        return id == that.id && associatedChunk == that.associatedChunk;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name);
+        return Objects.hash(id, associatedChunk);
     }
 
     @Override
     public String toString() {
         return "MetadataClass{" +
                 "id='" + id + '\'' +
+                ", chunk=" + associatedChunk +
                 ", name='" + getName() + "'" +
                 ", superType='" + superType + '\'' +
                 ", isSimpleType=" + isSimpleType +
