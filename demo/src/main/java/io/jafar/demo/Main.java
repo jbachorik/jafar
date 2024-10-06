@@ -2,6 +2,7 @@ package io.jafar.demo;
 
 import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
+import io.jafar.parser.api.types.JFRExecutionSample;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
 import org.openjdk.jmc.common.item.IItem;
@@ -58,11 +59,11 @@ public class Main {
     private static void runWithJafar(String[] args, LongAccumulator sum, AtomicInteger cnt) throws Exception {
         try (JafarParser p = JafarParser.open(args[1])) {
             HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
-                if (event.eventThread() == null) {
+                if (event.sampledThread() == null) {
                     throw new RuntimeException();
                 }
 
-                sum.accumulate(event.eventThread().javaThreadId());
+                sum.accumulate(event.sampledThread().javaThreadId());
                 sum.accumulate(event.stackTrace().frames().length);
                 cnt.incrementAndGet();
             });
@@ -76,7 +77,7 @@ public class Main {
             while (recording.hasMoreEvents()) {
                 RecordedEvent e = recording.readEvent();
                 if (e.getEventType().getName().equals("jdk.ExecutionSample")) {
-                    sum.accumulate(e.getThread("sampledThread").getId());
+                    sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
                     sum.accumulate(e.getStackTrace().getFrames().size());
                     cnt.incrementAndGet();
                 }

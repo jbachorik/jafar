@@ -9,8 +9,7 @@ import io.jafar.parser.api.types.JFRThread;
 public interface ExecutionSampleEvent {
     long startTime();
 
-    @JfrField("sampledThread")
     JFRThread eventThread();
-
+    JFRThread sampledThread();
     JFRStackTrace stackTrace();
 }

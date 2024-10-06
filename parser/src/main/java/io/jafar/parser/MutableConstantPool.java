@@ -1,7 +1,6 @@
 package io.jafar.parser;
 
 import io.jafar.parser.internal_api.ConstantPool;
-import io.jafar.parser.internal_api.DeserializationHandler;
 import io.jafar.parser.internal_api.RecordingStream;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
@@ -15,13 +14,11 @@ public final class MutableConstantPool implements ConstantPool {
 
     private final RecordingStream stream;
     private final MetadataClass clazz;
-    private final DeserializationHandler<?> handler;
 
     public MutableConstantPool(RecordingStream chunkStream, long typeId) {
         this.stream = chunkStream;
         var context = chunkStream.getContext();
         clazz = context.getMetadataLookup().getClass(typeId);
-        this.handler = context.getDeserializers().getDeserializer(clazz.getName());
     }
 
     public Object get(long id) {
@@ -31,7 +28,7 @@ public final class MutableConstantPool implements ConstantPool {
                 int pos = stream.position();
                 try {
                     stream.position(offset);
-                    return handler.handle(stream);
+                    return clazz.read(stream);
                 } finally {
                     stream.position(pos);
                 }

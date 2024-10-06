@@ -1,13 +1,9 @@
 package io.jafar.parser.internal_api.metadata;
 
-import io.jafar.parser.ParsingUtils;
-import io.jafar.parser.ValueLoader;
+import io.jafar.parser.internal_api.Deserializer;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -15,9 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 public final class MetadataClass extends AbstractMetadataElement {
     private static final Set<String> primitiveTypeNames = Set.of("byte", "char", "short", "int", "long", "float", "double", "boolean", "java.lang.String");
+
     private final Map<String, MetadataSetting> settings = new HashMap<>();
     private final List<MetadataAnnotation> annotations = new ArrayList<>();
     private final Map<String, MetadataField> fieldMap = new HashMap<>();
@@ -31,7 +29,9 @@ public final class MetadataClass extends AbstractMetadataElement {
 
     private final int associatedChunk;
 
-    private volatile MethodHandle skipHandler;
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<MetadataClass, Deserializer> DESERIALIZER_UPDATER = AtomicReferenceFieldUpdater.newUpdater(MetadataClass.class, Deserializer.class, "deserializer");
+    private volatile Deserializer<?> deserializer;
 
     MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.CLASS);
@@ -44,14 +44,15 @@ public final class MetadataClass extends AbstractMetadataElement {
         metadataLookup.addClass(id, this);
         resetAttributes();
         readSubelements(reader);
-        if (getName().equals("java.lang.String")) {
-            try {
-                skipHandler = MethodHandles.lookup().findStatic(ParsingUtils.class, "skipUTF8", MethodType.methodType(void.class, RecordingStream.class));
-            } catch (Throwable t) {
-                // should never happen unless the method name or signature changes
-                throw new RuntimeException(t);
-            }
-        }
+    }
+
+    public Deserializer<?> bindDeserializer() {
+        Deserializer<?> deserializer = Deserializer.forType(this);
+        return DESERIALIZER_UPDATER.compareAndSet(this, null, deserializer) ? deserializer : this.deserializer;
+    }
+
+    public Deserializer<?> getDeserializer() {
+        return deserializer;
     }
 
     public long getId() {
@@ -68,10 +69,6 @@ public final class MetadataClass extends AbstractMetadataElement {
 
     public boolean isPrimitive() {
         return isPrimitive;
-    }
-
-    public void setSkipHandler(MethodHandle handler) {
-        this.skipHandler = handler;
     }
 
     protected void onSubelement(AbstractMetadataElement element) {
@@ -107,10 +104,25 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     public void skip(RecordingStream stream) throws IOException {
+        if (deserializer == null) {
+            return;
+        }
         try {
-            skipHandler.invokeExact(stream);
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
+            deserializer.skip(stream);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T read(RecordingStream stream) {
+        if (deserializer == null) {
+            return null;
+        }
+        try {
+            return (T) deserializer.deserialize(stream);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
