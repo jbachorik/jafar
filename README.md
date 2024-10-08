@@ -19,7 +19,11 @@ count the number of samples and calculate the sum of the associated thread ids (
 JFR this takes around 1 second as compared to cca. 7 seconds using JMC parser. The JDK `jfr` tool will run out of memory,
 but to be fair it is trying to print the full content of each event.
 
-After the project is build via `./gradlew shadowJar` you can run the demo app with:
+### Building
+First, retrieve the binary resources via `./get_resources.sh`
+Then, build the project with `./gradlew shadowJar`
+
+Now, you can run the demo app with:
 ```shell
 # The Jafar parser
 java -jar demo/build/libs/demo-all.jar [jafar|jmc|jfr] path_to_jfr.jfr
