@@ -7,6 +7,9 @@ The goal is to be able to parse JFR files and extract the event data in programm
 ## Requirements
 Java 21 (mostly just because I wanted to try the pattern matching)
 
+Git LFS is used to store the JFR recordings, so you will need to have it installed to clone the repository.
+Install it following the instructions at https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage
+
 ## Tl;DR
 Allow quickly wiring JFR with interface based handlers using bytecode generation.
 I was nerdsniped by [@nitsanw](https://github.com/nitsanw) and quickly thrown together this more or less a PoC.
