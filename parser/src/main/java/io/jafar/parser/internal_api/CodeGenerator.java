@@ -11,6 +11,8 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
@@ -18,6 +20,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -33,6 +36,7 @@ import java.util.stream.Collectors;
 final class CodeGenerator {
 
     private static final boolean LOGS_ENABLED = false;
+    private static final Logger log = LoggerFactory.getLogger(CodeGenerator.class);
 
     private static void addLog(MethodVisitor mv, String msg) {
         if (LOGS_ENABLED) {
@@ -839,13 +843,18 @@ final class CodeGenerator {
         }
         byte[] classData = cw.toByteArray();
 
-        Files.write(Paths.get("/tmp/"+ origSimpleName + ".class"), classData);
+        Path debugPath = Paths.get("/tmp/"+ origSimpleName + ".class");
+        Files.write(debugPath, classData);
 
-        MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
-        MethodHandle ctrHandle = target != null ? lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class)) : null;
-        MethodHandle skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
-
-        return new Deserializer.Generated<>(ctrHandle, skipHandle);
+        try {
+            MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
+            MethodHandle ctrHandle = target != null ? lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class)) : null;
+            MethodHandle skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
+            return new Deserializer.Generated<>(ctrHandle, skipHandle);
+        } catch (Exception e) {
+            log.error("Failed to load generated handler class for {}, bytecode can be found at {}", clzName, debugPath, e);
+            throw new RuntimeException(e);
+        }
     }
 
     private static Set<String> collectUsedAttributes(Class<?> clz, Map<String, String> fieldToMethodMap) {
