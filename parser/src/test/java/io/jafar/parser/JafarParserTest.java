@@ -10,6 +10,8 @@ import org.openjdk.jmc.flightrecorder.writer.api.Recording;
 import org.openjdk.jmc.flightrecorder.writer.api.Recordings;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -57,61 +59,17 @@ public class JafarParserTest {
 
     @Test
     void testRealFile() throws Exception {
-        // TODO commented out until LFS is enabled for the GH project
-//        JafarParser p = JafarParser.open(Paths.get("/Users/jaroslav.bachorik/Downloads/test-jfr.jfr").toString());
-        JafarParser p = JafarParser.open(Paths.get("/Users/jaroslav.bachorik/Downloads/test-ap.jfr").toString());
-        AtomicLong eventCount = new AtomicLong(0);
-        HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
-            assertNotNull(event.eventThread());
-            assertNotNull(event.stackTrace());
-            assertTrue(event.stackTrace().frames().length > 0);
-            eventCount.incrementAndGet();
-        });
+        URI uri = JafarParserTest.class.getClassLoader().getResource("test-ap.jfr").toURI();
 
-        // warmup
-        long ts = System.nanoTime();
-        p.run();
-        System.out.println("=== cold access: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-
-//        assertTrue(eventCount.get() > 0);
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed up access[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        var h2 = p.handle(ThreadEndEvent.class, (event, ctl) -> {
-//            eventCount.incrementAndGet();
-//            assertNotNull(event.thread().javaName());
-//        });
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with two handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        h2.destroy(p);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with first handler[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
-//
-//        eventCount.set(0);
-//        h1.destroy(p);
-//        for (int i = 0; i < 100; i++) {
-//            ts = System.nanoTime();
-//            p.run();
-//            System.out.println("=== warmed with no handlers[" + i + "]: " + (System.nanoTime() - ts) / 1_000_000 + "ms");
-//        }
-//        System.out.println("=== event: " + eventCount.get());
+        try (JafarParser p = JafarParser.open(new File(uri).getAbsolutePath())) {
+            AtomicLong eventCount = new AtomicLong(0);
+            HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
+                assertNotNull(event.eventThread());
+                assertNotNull(event.stackTrace());
+                assertNotNull(event.eventThread());
+                assertTrue(event.stackTrace().frames().length > 0);
+                eventCount.incrementAndGet();
+            });
+        }
     }
 }

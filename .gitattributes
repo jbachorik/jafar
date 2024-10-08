@@ -1,0 +1,4 @@
+parser/src/test/resources/test-ap.jfr filter=lfs diff=lfs merge=lfs -text
+demo/src/test/resources/test-ap.jfr filter=lfs diff=lfs merge=lfs -text
+demo/src/test/resources/test-async.jfr filter=lfs diff=lfs merge=lfs -text
+demo/src/test/resources/test-jfr.jfr filter=lfs diff=lfs merge=lfs -text
