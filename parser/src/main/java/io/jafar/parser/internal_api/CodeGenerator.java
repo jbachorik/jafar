@@ -295,14 +295,15 @@ final class CodeGenerator {
         Label l1 = new Label();
         Label l2 = new Label();
         Label l3 = new Label();
-        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(RecordingStream.class), "readVarint", Type.getMethodDescriptor(Type.LONG_TYPE), false); // [this, long]
-        mv.visitInsn(Opcodes.L2I); // [this, int]
-        mv.visitInsn(Opcodes.DUP); // [this, int, int]
-        mv.visitJumpInsn(Opcodes.IFEQ, l2); // [this, int]
-        mv.visitVarInsn(Opcodes.ISTORE, arraySizeIdx); // [stream]
+        mv.visitInsn(Opcodes.DUP); // [stream, stream]
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(RecordingStream.class), "readVarint", Type.getMethodDescriptor(Type.LONG_TYPE), false); // [stream, long]
+        mv.visitInsn(Opcodes.L2I); // [stream, int]
+        mv.visitInsn(Opcodes.DUP); // [stream, int, int]
+        mv.visitVarInsn(Opcodes.ISTORE, arraySizeIdx); // [stream, int]
+        mv.visitJumpInsn(Opcodes.IFEQ, l2); // [stream]
         mv.visitLabel(l1);
         mv.visitInsn(Opcodes.DUP); // [stream, stream]
-        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(RecordingStream.class), operation, dataType.getDescriptor(), false); // [stream, value]
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(RecordingStream.class), operation, Type.getMethodDescriptor(dataType), false); // [stream, value]
         mv.visitInsn(dataType.getSize() == 2 ? Opcodes.POP2 : Opcodes.POP); // [stream]
         mv.visitVarInsn(Opcodes.ILOAD, arraySizeIdx); // [stream, int]
         mv.visitLdcInsn(1); // [stream, int, 1]
@@ -312,7 +313,7 @@ final class CodeGenerator {
         mv.visitJumpInsn(Opcodes.IFNE, l1); // [stream]
         mv.visitInsn(Opcodes.POP); // []
         mv.visitJumpInsn(Opcodes.GOTO, l3);
-        mv.visitLabel(l2); // [int]
+        mv.visitLabel(l2); // [stream]
         mv.visitInsn(Opcodes.POP); // []
         mv.visitLabel(l3); // []
     }
@@ -852,7 +853,7 @@ final class CodeGenerator {
             MethodHandle skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
             return new Deserializer.Generated<>(ctrHandle, skipHandle);
         } catch (Exception e) {
-            log.error("Failed to load generated handler class for {}, bytecode can be found at {}", clzName, debugPath, e);
+            log.error("Failed to load generated handler class for {}, bytecode can be found at {}", clz, debugPath, e);
             throw new RuntimeException(e);
         }
     }
