@@ -3,6 +3,7 @@ package io.jafar.demo;
 import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
 import io.jafar.parser.api.types.JFRExecutionSample;
+import jdk.jfr.consumer.EventStream;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
 import org.openjdk.jmc.common.item.IItem;
@@ -23,7 +24,7 @@ import java.util.concurrent.atomic.LongAccumulator;
 public class Main {
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            throw new IllegalArgumentException("Usage: <jafar|jmc|jfr> <recording>");
+            throw new IllegalArgumentException("Usage: <jafar|jmc|jfr|jfr-stream> <recording>");
         }
 
         AtomicInteger cnt = new AtomicInteger();
@@ -35,6 +36,8 @@ public class Main {
             runWithJmc(file, sum, cnt);
         } else if ("jfr".equalsIgnoreCase(args[0])) {
             runWithJfr(file, sum, cnt);
+        } else if ("jfr-stream".equalsIgnoreCase(args[0])) {
+            runWithJfrStream(file, sum, cnt);
         } else {
             throw new IllegalArgumentException("Unknown parser: " + args[0]);
         }
@@ -83,6 +86,23 @@ public class Main {
                     cnt.incrementAndGet();
                 }
             }
+        }
+    }
+
+    private static void runWithJfrStream(File file, LongAccumulator sum, AtomicInteger cnt) throws IOException, CouldNotLoadRecordingException {
+        var es = EventStream.openFile(Paths.get(file.getPath()));
+        es.setReuse(true);
+        es.setOrdered(false);
+        es.onEvent("jdk.ExecutionSample", e -> {
+            sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
+            sum.accumulate(e.getStackTrace().getFrames().size());
+            cnt.incrementAndGet();
+        });
+        es.start();
+        try {
+            es.awaitTermination();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }
