@@ -9,7 +9,7 @@ import java.util.List;
 public final class MetadataElement extends AbstractMetadataElement {
     private final List<MetadataClass> classes = new ArrayList<>();
 
-    public MetadataElement(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataElement(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.META);
         resetAttributes();
         readSubelements(reader);

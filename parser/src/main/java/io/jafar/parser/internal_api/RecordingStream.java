@@ -100,26 +100,59 @@ public final class RecordingStream implements AutoCloseable {
     }
   }
 
-  public long readVarint() throws IOException {
-    try {
-      // TODO can optimise this
-      long value = 0;
-      int readValue = 0;
-      int i = 0;
-      do {
-        readValue = delegate.get();
-        value |= (long) (readValue & 0x7F) << (7 * i);
-        i++;
-      } while ((readValue & 0x80) != 0
-          // In fact a fully LEB128 encoded 64bit number could take up to 10 bytes
-          // (in order to store 64 bit original value using 7bit slots we need at most 10 of them).
-          // However, eg. JMC parser will stop at 9 bytes, assuming that the compressed number is
-          // a Java unsigned long (therefore having only 63 bits and they all fit in 9 bytes).
-          && i < 9);
-      return value;
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
+  private long readFullLong() {
+    int offset = 8 - delegate.remaining();
+    if (offset > 0) {
+      position(delegate.position() - offset);
+      return (delegate.getLong() & (0xffffffffffffffffL << offset * 8)) << offset * 8;
+    } else {
+      return delegate.getLong();
     }
+  }
+
+  public long readVarint() throws IOException {
+    byte b0 = delegate.get();
+    long ret = (b0 & 0x7FL);
+    if (b0 >= 0) {
+      return ret;
+    }
+    int b1 = delegate.get();
+    ret += (b1 & 0x7FL) << 7;
+    if (b1 >= 0) {
+      return ret;
+    }
+    int b2 = delegate.get();
+    ret += (b2 & 0x7FL) << 14;
+    if (b2 >= 0) {
+      return ret;
+    }
+    int b3 = delegate.get();
+    ret += (b3 & 0x7FL) << 21;
+    if (b3 >= 0) {
+      return ret;
+    }
+    int b4 = delegate.get();
+    ret += (b4 & 0x7FL) << 28;
+    if (b4 >= 0) {
+      return ret;
+    }
+    int b5 = delegate.get();
+    ret += (b5 & 0x7FL) << 35;
+    if (b5 >= 0) {
+      return ret;
+    }
+    int b6 = delegate.get();
+    ret += (b6 & 0x7FL) << 42;
+    if (b6 >= 0) {
+      return ret;
+    }
+    int b7 = delegate.get();
+    ret += (b7 & 0x7FL) << 49;
+    if (b7 >= 0) {
+      return ret;
+    }
+    int b8 = delegate.get();// read last byte raw
+    return ret + (((long) (b8 & 0XFF)) << 56);
   }
 
   public boolean readBoolean() throws IOException {

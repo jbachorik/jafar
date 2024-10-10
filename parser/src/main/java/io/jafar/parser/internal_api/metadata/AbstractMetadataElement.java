@@ -1,6 +1,7 @@
 package io.jafar.parser.internal_api.metadata;
 
 import io.jafar.parser.MutableMetadataLookup;
+import io.jafar.parser.internal_api.ParserContext;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
@@ -65,7 +66,16 @@ public abstract class AbstractMetadataElement {
         return name;
     }
 
+    public String getSimpleName() {
+        int idx = name.lastIndexOf('.');
+        return idx == -1 ? name : name.substring(idx + 1);
+    }
+
     public MetadataElementKind getKind() {
         return kind;
+    }
+
+    public ParserContext getContext() {
+        return stream.getContext();
     }
 }

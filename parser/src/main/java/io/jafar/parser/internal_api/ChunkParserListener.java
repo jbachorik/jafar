@@ -56,5 +56,5 @@ public interface ChunkParserListener {
   }
 
   /** Called when the recording was fully processed */
-  default void onRecordingEnd() {}
+  default void onRecordingEnd(ParserContext context) {}
 }

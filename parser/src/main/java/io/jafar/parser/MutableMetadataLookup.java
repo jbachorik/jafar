@@ -28,6 +28,12 @@ public final class MutableMetadataLookup implements MetadataLookup {
         this.strings = Arrays.copyOf(stringTable, stringTable.length);
     }
 
+    public void bindDeserializers() {
+        for (MetadataClass clazz : classes.values()) {
+            clazz.bindDeserializer();
+        }
+    }
+
     public void clear() {
         strings = null;
         classes.clear();

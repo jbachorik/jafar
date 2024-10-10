@@ -173,7 +173,7 @@ public final class StreamingChunkParser implements AutoCloseable {
     } catch (Throwable t) {
       throw new IOException("Error parsing recording", t);
     } finally {
-      listener.onRecordingEnd();
+      listener.onRecordingEnd(stream.getContext());
     }
   }
 

@@ -1,7 +1,6 @@
 package io.jafar.parser.internal_api.metadata;
 
-import io.jafar.parser.ParsingUtils;
-import io.jafar.parser.ValueLoader;
+import io.jafar.parser.internal_api.Deserializer;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
@@ -12,9 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 public final class MetadataClass extends AbstractMetadataElement {
     private static final Set<String> primitiveTypeNames = Set.of("byte", "char", "short", "int", "long", "float", "double", "boolean", "java.lang.String");
+
     private final Map<String, MetadataSetting> settings = new HashMap<>();
     private final List<MetadataAnnotation> annotations = new ArrayList<>();
     private final Map<String, MetadataField> fieldMap = new HashMap<>();
@@ -26,7 +27,11 @@ public final class MetadataClass extends AbstractMetadataElement {
     private final boolean isPrimitive;
     private final boolean simple;
 
-    final ExceptionalConsumer<RecordingStream, IOException> skipInstruction;
+    private final int associatedChunk;
+
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<MetadataClass, Deserializer> DESERIALIZER_UPDATER = AtomicReferenceFieldUpdater.newUpdater(MetadataClass.class, Deserializer.class, "deserializer");
+    private volatile Deserializer<?> deserializer;
 
     MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.CLASS);
@@ -35,11 +40,19 @@ public final class MetadataClass extends AbstractMetadataElement {
         this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
         this.isPrimitive = primitiveTypeNames.contains(getName());
         this.simple = isSimpleType || isPrimitive(name);
+        this.associatedChunk = stream.getContext().getChunkIndex();
         metadataLookup.addClass(id, this);
         resetAttributes();
         readSubelements(reader);
-        // must be the last instruction such that all fields are resolved
-        this.skipInstruction = getSkipInstruction(this);
+    }
+
+    public Deserializer<?> bindDeserializer() {
+        Deserializer<?> deserializer = Deserializer.forType(this);
+        return DESERIALIZER_UPDATER.compareAndSet(this, null, deserializer) ? deserializer : this.deserializer;
+    }
+
+    public Deserializer<?> getDeserializer() {
+        return deserializer;
     }
 
     public long getId() {
@@ -91,7 +104,26 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     public void skip(RecordingStream stream) throws IOException {
-        skipInstruction.accept(stream);
+        if (deserializer == null) {
+            return;
+        }
+        try {
+            deserializer.skip(stream);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T read(RecordingStream stream) {
+        if (deserializer == null) {
+            return null;
+        }
+        try {
+            return (T) deserializer.deserialize(stream);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static boolean isPrimitive(String typeName) {
@@ -106,61 +138,24 @@ public final class MetadataClass extends AbstractMetadataElement {
                 typeName.equals("java.lang.String");
     }
 
-    private static ExceptionalConsumer<RecordingStream, IOException> getSkipInstruction(MetadataClass typeDescriptor) {
-        switch (typeDescriptor.getName()) {
-            case "byte", "boolean": {
-                return RecordingStream::read;
-            }
-            case "short", "char", "int", "long": {
-                return RecordingStream::readVarint;
-            }
-            case "float": {
-                return RecordingStream::readFloat;
-            }
-            case "double": {
-                return RecordingStream::readDouble;
-            }
-            case "java.lang.String":
-                return ParsingUtils::skipUTF8;
-            default: {
-                if (typeDescriptor.getFields().size() == 1) {
-                    MetadataField field = typeDescriptor.getFields().getFirst();
-                    if (field.hasConstantPool()) {
-                        return RecordingStream::readVarint;
-                    }
-                    return stream -> {
-                        MetadataClass fieldType = field.getType();
-                        fieldType.skip(stream);
-                    };
-                }
-                List<MetadataField> fields = typeDescriptor.getFields();
-                return stream -> {
-                    for (int i = 0; i < fields.size(); i++) {
-                        MetadataField fld = fields.get(i);
-                        ValueLoader.skip(stream, fld.getType(), fld.getDimension() > 0, fld.hasConstantPool());
-                    }
-                };
-            }
-        }
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MetadataClass that = (MetadataClass) o;
-        return id == that.id && name.equals(that.name);
+        return id == that.id && associatedChunk == that.associatedChunk;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name);
+        return Objects.hash(id, associatedChunk);
     }
 
     @Override
     public String toString() {
         return "MetadataClass{" +
                 "id='" + id + '\'' +
+                ", chunk=" + associatedChunk +
                 ", name='" + getName() + "'" +
                 ", superType='" + superType + '\'' +
                 ", isSimpleType=" + isSimpleType +
