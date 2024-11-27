@@ -844,8 +844,11 @@ final class CodeGenerator {
         }
         byte[] classData = cw.toByteArray();
 
-        Path debugPath = Paths.get("/tmp/"+ origSimpleName + ".class");
-        Files.write(debugPath, classData);
+        Path debugPath = null;
+        if (log.isDebugEnabled()) {
+            debugPath = Paths.get("/tmp/" + origSimpleName + ".class");
+            Files.write(debugPath, classData);
+        }
 
         try {
             MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
