@@ -7,6 +7,9 @@ The goal is to be able to parse JFR files and extract the event data in programm
 ## Requirements
 Java 21 (mostly just because I wanted to try the pattern matching)
 
+Git LFS is used to store the JFR recordings, so you will need to have it installed to clone the repository.
+Install it following the instructions at https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage
+
 ## Tl;DR
 Allow quickly wiring JFR with interface based handlers using bytecode generation.
 I was nerdsniped by [@nitsanw](https://github.com/nitsanw) and quickly thrown together this more or less a PoC.
@@ -16,7 +19,11 @@ count the number of samples and calculate the sum of the associated thread ids (
 JFR this takes around 1 second as compared to cca. 7 seconds using JMC parser. The JDK `jfr` tool will run out of memory,
 but to be fair it is trying to print the full content of each event.
 
-After the project is build via `./gradlew shadowJar` you can run the demo app with:
+### Building
+First, retrieve the binary resources via `./get_resources.sh`
+Then, build the project with `./gradlew shadowJar`
+
+Now, you can run the demo app with:
 ```shell
 # The Jafar parser
 java -jar demo/build/libs/demo-all.jar [jafar|jmc|jfr] path_to_jfr.jfr

@@ -1,11 +1,11 @@
 package io.jafar.parser.internal_api;
 
-import io.jafar.parser.Deserializers;
 import io.jafar.parser.MutableConstantPools;
 import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.TypeFilter;
 
 import java.lang.ref.WeakReference;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -16,8 +16,7 @@ public final class ParserContext {
     private final int chunkIndex;
     private volatile TypeFilter typeFilter;
 
-    private final Deserializers deserializers = new Deserializers();
-
+    private final Map<String, Class<?>> classTargetTypeMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, WeakReference<?>> bag = new ConcurrentHashMap<>();
 
     public ParserContext() {
@@ -34,6 +33,11 @@ public final class ParserContext {
 
         this.typeFilter = typeFilter;
         this.chunkIndex = chunkIndex;
+    }
+
+    public void clear() {
+        classTargetTypeMap.clear();
+        bag.clear();
     }
 
     public MetadataLookup getMetadataLookup() {
@@ -56,10 +60,6 @@ public final class ParserContext {
         return chunkIndex;
     }
 
-    public Deserializers getDeserializers() {
-        return deserializers;
-    }
-
     public <T> void put(String key, Class<T> clz, T value) {
         bag.put(key, new WeakReference<>(value));
     }
@@ -68,7 +68,15 @@ public final class ParserContext {
         return clz.cast(bag.get(key).get());
     }
 
-    public void clear() {
-        deserializers.clear();
+    public void addTargetTypeMap(Map<String, Class<?>> map) {
+        this.classTargetTypeMap.putAll(map);
+    }
+
+    public Class<?> getClassTargetType(String name) {
+        return classTargetTypeMap.get(name);
+    }
+
+    public void bindDeserializers() {
+        metadataLookup.bindDeserializers();
     }
 }
