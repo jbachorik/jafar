@@ -3,13 +3,13 @@ package io.jafar.parser;
 import io.jafar.parser.internal_api.ConstantPool;
 import io.jafar.parser.internal_api.RecordingStream;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
-import it.unimi.dsi.fastutil.longs.Long2IntMap;
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 public final class MutableConstantPool implements ConstantPool {
-    private final Long2IntMap offsets = new Long2IntOpenHashMap(10000, 0.75f);
+    private final Long2LongMap offsets = new Long2LongOpenHashMap(10000, 0.75f);
     private final Long2ObjectMap<Object> entries = new Long2ObjectOpenHashMap<>();
 
     private final RecordingStream stream;
@@ -22,10 +22,10 @@ public final class MutableConstantPool implements ConstantPool {
     }
 
     public Object get(long id) {
-        int offset = offsets.get(id);
+        long offset = offsets.get(id);
         if (offset > 0) {
             return entries.computeIfAbsent(id, k -> {
-                int pos = stream.position();
+                long pos = stream.position();
                 try {
                     stream.position(offset);
                     return clazz.read(stream);
@@ -37,7 +37,7 @@ public final class MutableConstantPool implements ConstantPool {
         return null;
     }
 
-    public void addOffset(long id, int offset) {
+    public void addOffset(long id, long offset) {
         offsets.put(id, offset);
     }
 

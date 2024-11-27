@@ -3,6 +3,7 @@ package io.jafar.parser.internal_api;
 import io.jafar.parser.MutableConstantPools;
 import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.internal_api.metadata.MetadataEvent;
+import io.jafar.utils.CustomByteBuffer;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.slf4j.Logger;
@@ -10,7 +11,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -59,7 +59,7 @@ public final class StreamingChunkParser implements AutoCloseable {
    * @param listener the parser listener
    * @throws IOException
    */
-  public void parse(ByteBuffer buffer, ChunkParserListener listener) throws IOException {
+  public void parse(CustomByteBuffer buffer, ChunkParserListener listener) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
@@ -68,7 +68,7 @@ public final class StreamingChunkParser implements AutoCloseable {
     }
   }
 
-  public void parse(ByteBuffer buffer, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
+  public void parse(CustomByteBuffer buffer, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
@@ -87,7 +87,7 @@ public final class StreamingChunkParser implements AutoCloseable {
     }
   }
 
-  private Future<Boolean> submitParsingTask(ChunkHeader chunkHeader, RecordingStream chunkStream, ChunkParserListener listener, boolean forceConstantPools, int remainder) {
+  private Future<Boolean> submitParsingTask(ChunkHeader chunkHeader, RecordingStream chunkStream, ChunkParserListener listener, boolean forceConstantPools, long remainder) {
     return executor.submit(() -> {
       int chunkCounter = chunkHeader.order;
       try {
@@ -113,7 +113,7 @@ public final class StreamingChunkParser implements AutoCloseable {
         }
         chunkStream.position(remainder);
         while (chunkStream.position() < chunkHeader.size) {
-          int eventStartPos = chunkStream.position();
+          long eventStartPos = chunkStream.position();
           chunkStream.mark(); // max 2 varints ahead
           int eventSize = (int) chunkStream.readVarint();
           if (eventSize > 0) {
@@ -151,7 +151,7 @@ public final class StreamingChunkParser implements AutoCloseable {
       int chunkCounter = 1;
       while (stream.available() > 0) {
         ChunkHeader header = new ChunkHeader(stream, chunkCounter);
-        int remainder = (stream.position() - header.offset);
+        long remainder = (stream.position() - header.offset);
         MutableMetadataLookup metadataLookup = chunkMetadataLookup.computeIfAbsent(chunkCounter, k -> new MutableMetadataLookup());
         MutableConstantPools constantPools = chunkConstantPools.computeIfAbsent(chunkCounter, k -> new MutableConstantPools(metadataLookup));
 

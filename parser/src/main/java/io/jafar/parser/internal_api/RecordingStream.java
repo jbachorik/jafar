@@ -1,26 +1,27 @@
 package io.jafar.parser.internal_api;
 
+import io.jafar.utils.CustomByteBuffer;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 public final class RecordingStream implements AutoCloseable {
-  private final ByteBuffer delegate;
+  private final CustomByteBuffer delegate;
 
   private final ParserContext context;
 
-  RecordingStream(ByteBuffer buffer) {
+  RecordingStream(CustomByteBuffer buffer) {
     this(buffer, new ParserContext());
   }
 
-  public RecordingStream slice(int pos, int len, ParserContext context) {
+  public RecordingStream slice(long pos, long len, ParserContext context) {
     return new RecordingStream(delegate.slice(pos, len), context);
   }
 
-  private RecordingStream(ByteBuffer buffer, ParserContext context) {
+  public RecordingStream(CustomByteBuffer buffer, ParserContext context) {
     if (buffer.order() == ByteOrder.LITTLE_ENDIAN) {
       this.delegate = buffer.slice().order(ByteOrder.BIG_ENDIAN);
     } else {
@@ -33,11 +34,11 @@ public final class RecordingStream implements AutoCloseable {
     return context;
   }
 
-  public void position(int position) {
+  public void position(long position) {
     delegate.position(position);
   }
 
-  public int position() {
+  public long position() {
     return delegate.position();
   }
 
@@ -101,7 +102,7 @@ public final class RecordingStream implements AutoCloseable {
   }
 
   private long readFullLong() {
-    int offset = 8 - delegate.remaining();
+    int offset = (int)(8 - delegate.remaining());
     if (offset > 0) {
       position(delegate.position() - offset);
       return (delegate.getLong() & (0xffffffffffffffffL << offset * 8)) << offset * 8;
@@ -159,7 +160,7 @@ public final class RecordingStream implements AutoCloseable {
     return read() != 0;
   }
 
-  public int available() {
+  public long available() {
     return delegate.remaining();
   }
 

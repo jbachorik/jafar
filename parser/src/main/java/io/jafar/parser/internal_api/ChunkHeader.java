@@ -10,7 +10,7 @@ public final class ChunkHeader {
   public static final int MAGIC_BE = BytePacking.pack(ByteOrder.BIG_ENDIAN, 'F', 'L', 'R', '\0');
 
   public final int order;
-  public final int offset;
+  public final long offset;
   public final short major;
   public final short minor;
   public final int size;
