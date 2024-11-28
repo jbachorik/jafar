@@ -104,7 +104,6 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
                 throw new BufferOverflowException();
             }
             offset = 0;
-            splices[index].load();
             splices[index].position(offset);
         }
     }

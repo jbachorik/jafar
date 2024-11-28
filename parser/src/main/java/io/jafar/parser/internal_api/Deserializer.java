@@ -77,19 +77,25 @@ public abstract class Deserializer<T> {
     public static final class Generated<T> extends Deserializer<T> {
         private final MethodHandle skipHandler;
         private final MethodHandle deserializeHandler;
+        private final TypeSkipper typeSkipper;
 
-        public Generated(MethodHandle deserializeHandler, MethodHandle skipHandler) {
+        public Generated(MethodHandle deserializeHandler, MethodHandle skipHandler, TypeSkipper skipper) {
             this.deserializeHandler = deserializeHandler;
             this.skipHandler = skipHandler;
+            this.typeSkipper = skipper;
         }
 
         @Override
         public void skip(RecordingStream stream) throws Exception {
-            try {
-                skipHandler.invokeExact(stream);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
-            }
+            typeSkipper.skip(stream);
+
+            xxx do not use memory mapped files but progressively loaded byte buffer xxx
+
+//            try {
+//                skipHandler.invokeExact(stream);
+//            } catch (Throwable t) {
+//                throw new RuntimeException(t);
+//            }
         }
 
         @SuppressWarnings("unchecked")

@@ -772,6 +772,9 @@ final class CodeGenerator {
         if (target != null && !target.isInterface()) {
             throw new RuntimeException("Unsupported type: " + clz.getName());
         }
+        if (target == null) {
+            return new Deserializer.Generated<>(null, null, createSkipper(clz));
+        }
         String origClzName = target != null ? target.getName() : clz.getName();
         String origSimpleName = target != null ? target.getSimpleName() : clz.getSimpleName();
         String clzName = CodeGenerator.class.getPackage().getName() + "." + (target != null ? target.getSimpleName() : clz.getSimpleName()) + "$" + clz.getContext().getChunkIndex();
@@ -854,10 +857,49 @@ final class CodeGenerator {
             MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
             MethodHandle ctrHandle = target != null ? lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class)) : null;
             MethodHandle skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
-            return new Deserializer.Generated<>(ctrHandle, skipHandle);
+            return new Deserializer.Generated<>(ctrHandle, skipHandle, createSkipper(clz));
         } catch (Exception e) {
             log.error("Failed to load generated handler class for {}, bytecode can be found at {}", clz, debugPath, e);
             throw new RuntimeException(e);
+        }
+    }
+
+    private static TypeSkipper createSkipper(MetadataClass clz) {
+        List<TypeSkipper.Instruction> instructions = new ArrayList<>(100);
+        for (MetadataField fld : clz.getFields()) {
+            fillSkipper(fld, instructions);
+        }
+        return new TypeSkipper(instructions.toArray(new TypeSkipper.Instruction[0]));
+    }
+
+    private static void fillSkipper(MetadataField fld, List<TypeSkipper.Instruction> instructions) {
+        MetadataClass fldClz = fld.getType();
+        if (fld.getDimension() > 0) {
+            instructions.add(TypeSkipper.Instruction.ARRAY);
+        }
+        switch (fldClz.getName()) {
+            case "byte", "boolean" ->
+                    instructions.add(TypeSkipper.Instruction.BYTE);
+            case "char", "short", "int", "long" ->
+                    instructions.add(TypeSkipper.Instruction.VARINT);
+            case "float" ->
+                    instructions.add(TypeSkipper.Instruction.FLOAT);
+            case "double" ->
+                    instructions.add(TypeSkipper.Instruction.DOUBLE);
+            case "java.lang.String" ->
+                    instructions.add(TypeSkipper.Instruction.STRING);
+            default -> {
+                if (fld.hasConstantPool()) {
+                    instructions.add(TypeSkipper.Instruction.VARINT);
+                } else {
+                    for (MetadataField subField : fldClz.getFields()) {
+                        fillSkipper(subField, instructions);
+                    }
+                }
+            }
+        }
+        if (fld.getDimension() > 0) {
+            instructions.add(TypeSkipper.Instruction.ARRAY_END);
         }
     }
 

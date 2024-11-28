@@ -9,13 +9,15 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 public final class MutableConstantPool implements ConstantPool {
-    private final Long2LongMap offsets = new Long2LongOpenHashMap(10000, 0.75f);
-    private final Long2ObjectMap<Object> entries = new Long2ObjectOpenHashMap<>();
+    private final Long2LongMap offsets;
+    private final Long2ObjectMap<Object> entries;
 
     private final RecordingStream stream;
     private final MetadataClass clazz;
 
-    public MutableConstantPool(RecordingStream chunkStream, long typeId) {
+    public MutableConstantPool(RecordingStream chunkStream, long typeId, int count) {
+        this.offsets = new Long2LongOpenHashMap(count);
+        this.entries = new Long2ObjectOpenHashMap<>(count);
         this.stream = chunkStream;
         var context = chunkStream.getContext();
         clazz = context.getMetadataLookup().getClass(typeId);
