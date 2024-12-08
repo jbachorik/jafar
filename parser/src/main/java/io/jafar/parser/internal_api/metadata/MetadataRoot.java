@@ -12,9 +12,9 @@ public final class MetadataRoot extends AbstractMetadataElement {
     private MetadataElement metadata;
     private MetadataRegion region;
 
-    MetadataRoot(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataRoot(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.ROOT);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override

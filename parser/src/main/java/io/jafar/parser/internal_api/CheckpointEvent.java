@@ -52,7 +52,7 @@ public final class CheckpointEvent extends AbstractEvent {
                 MutableConstantPool constantPool = skip ? null : ((MutableConstantPools) context.getConstantPools()).addOrGetConstantPool(stream, typeId, count);
                 for (int j = 0; j < count; j++) {
                     long id = stream.readVarint();
-                    if (!skip) {
+                    if (!skip && !constantPool.containsKey(id)) {
                         constantPool.addOffset(id, stream.position());
                     }
                     clz.skip(stream);

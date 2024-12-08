@@ -57,24 +57,44 @@ public final class MetadataEvent extends AbstractEvent {
     ((MutableMetadataLookup)stream.getContext().getMetadataLookup()).setStringtable(stringConstants);
   }
 
-  private AbstractMetadataElement readElement(RecordingStream stream) throws IOException {
+  AbstractMetadataElement readElement(RecordingStream stream) throws IOException {
     try {
       // get the element name
       int stringPtr = (int) stream.readVarint();
       String typeId = stream.getContext().getMetadataLookup().getString(stringPtr);
-      AbstractMetadataElement element = switch (typeId) {
-        case "class" -> {
-          MetadataClass clz = new MetadataClass(stream, this::readElement);
+      AbstractMetadataElement element = null;
+      switch (typeId) {
+        case "class": {
+          MetadataClass clz = new MetadataClass(stream, this);
           classes.add(clz);
-          yield clz;
+          element =  clz;
+          break;
         }
-        case "field" -> new MetadataField(stream, this::readElement, forceConstantPools);
-        case "annotation" -> new MetadataAnnotation(stream, this::readElement);
-        case "root" -> new MetadataRoot(stream, this::readElement);
-        case "metadata" -> new MetadataElement(stream, this::readElement);
-        case "region" -> new MetadataRegion(stream, this::readElement);
-        case "setting" -> new MetadataSetting(stream, this::readElement);
-        default -> {
+        case "field": {
+          element = new MetadataField(stream, this, forceConstantPools);
+          break;
+        }
+        case "annotation": {
+          element = new MetadataAnnotation(stream, this);
+          break;
+        }
+        case "root": {
+          element = new MetadataRoot(stream, this);
+          break;
+        }
+        case "metadata": {
+          element = new MetadataElement(stream, this);
+          break;
+        }
+        case "region": {
+          element = new MetadataRegion(stream, this);
+          break;
+        }
+        case "setting": {
+          element = new MetadataSetting(stream, this);
+          break;
+        }
+        default: {
           throw new IOException("Unsupported metadata type: " + typeId);
         }
       };

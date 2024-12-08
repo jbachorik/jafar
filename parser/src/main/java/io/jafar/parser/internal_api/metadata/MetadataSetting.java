@@ -12,9 +12,9 @@ final class MetadataSetting extends AbstractMetadataElement {
     private String value;
     private long typeId;
 
-    public MetadataSetting(RecordingStream stream, ElementReader reader) throws IOException {
+    public MetadataSetting(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.SETTING);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override
@@ -68,7 +68,8 @@ final class MetadataSetting extends AbstractMetadataElement {
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            hashCode = Objects.hash(value, typeId);
+            long mixed = typeId * 0x9E3779B97F4A7C15L + Objects.hashCode(value) * 0xC6BC279692B5C323L;
+            hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }
         return hashCode;

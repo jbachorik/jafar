@@ -36,11 +36,11 @@ public final class MetadataClass extends AbstractMetadataElement {
     private static final AtomicReferenceFieldUpdater<MetadataClass, Deserializer> DESERIALIZER_UPDATER = AtomicReferenceFieldUpdater.newUpdater(MetadataClass.class, Deserializer.class, "deserializer");
     private volatile Deserializer<?> deserializer;
 
-    MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataClass(RecordingStream stream, MetadataEvent eventr) throws IOException {
         super(stream, MetadataElementKind.CLASS);
 //        this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
         this.associatedChunk = stream.getContext().getChunkIndex();
-        readSubelements(reader);
+        readSubelements(eventr);
         metadataLookup.addClass(getId(), this);
     }
 
@@ -170,7 +170,11 @@ public final class MetadataClass extends AbstractMetadataElement {
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            hashCode = Objects.hash(getId(), getName(), superType, fields);
+            long mixed = getId() * 0x9E3779B97F4A7C15L
+                    + getName().hashCode() * 0xC6BC279692B5C323L
+                    + Objects.hashCode(superType) * 0xD8163841FDE6A8F9L
+                    + Objects.hashCode(fields) * 0xA3B195354A39B70DL;
+            hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }
         return hashCode;

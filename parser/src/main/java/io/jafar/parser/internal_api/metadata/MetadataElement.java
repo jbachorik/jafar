@@ -13,9 +13,9 @@ public final class MetadataElement extends AbstractMetadataElement {
 
     private List<MetadataClass> classes = null;
 
-    MetadataElement(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataElement(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.META);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override

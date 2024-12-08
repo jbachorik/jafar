@@ -13,9 +13,9 @@ public final class MetadataRegion extends AbstractMetadataElement {
     private long gmtOffset;
     private String locale;
 
-    MetadataRegion(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataRegion(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.REGION);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override
@@ -76,7 +76,8 @@ public final class MetadataRegion extends AbstractMetadataElement {
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            hashCode = Objects.hash(dst, gmtOffset, locale);
+            long mixed = dst * 0x9E3779B97F4A7C15L + gmtOffset * 0xC6BC279692B5C323L + Objects.hashCode(locale) * 0xD8163841FDE6A8F9L;
+            hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }
         return hashCode;

@@ -42,6 +42,10 @@ public final class MutableConstantPool implements ConstantPool {
         return null;
     }
 
+    public boolean containsKey(long key) {
+        return offsets.containsKey(key);
+    }
+
     public void addOffset(long id, long offset) {
         offsets.put(id, offset);
     }

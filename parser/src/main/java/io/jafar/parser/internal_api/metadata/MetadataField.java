@@ -17,9 +17,9 @@ public final class MetadataField extends AbstractMetadataElement {
     private int dimension;
     private MetadataClass type = null;
 
-    MetadataField(RecordingStream stream, ElementReader reader, boolean forceConstantPools) throws IOException {
+    MetadataField(RecordingStream stream, MetadataEvent event, boolean forceConstantPools) throws IOException {
         super(stream, MetadataElementKind.FIELD);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override
@@ -100,7 +100,8 @@ public final class MetadataField extends AbstractMetadataElement {
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            hashCode = Objects.hash(classId, hasConstantPool, dimension);
+            long mixed = classId * 0x9E3779B97F4A7C15L + (hasConstantPool ? 1 : 0) * 0xC6BC279692B5C323L + dimension * 0xD8163841FDE6A8F9L;
+            hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }
         return hashCode;

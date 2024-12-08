@@ -28,6 +28,8 @@ public final class ParserContext {
 
     private final ConcurrentMap<MetadataClass, Deserializer<?>> globalDeserializerCache;
 
+    public final byte[] byteBuffer = new byte[4096];
+
     public ParserContext() {
         this.metadataLookup = new MutableMetadataLookup();
         this.constantPools = new MutableConstantPools(metadataLookup);
@@ -102,4 +104,6 @@ public final class ParserContext {
     public ConcurrentMap<MetadataClass, Deserializer<?>> getDeserializerCache() {
         return globalDeserializerCache;
     }
+
+
 }

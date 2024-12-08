@@ -129,6 +129,12 @@ public final class StreamingChunkParser implements AutoCloseable {
                 listener.onChunkEnd(chunkCounter, true);
                 return false;
               }
+            } else if (eventType == 1) {
+//              chunkStream.reset();
+//              if (!readThisConstantPool(chunkStream, listener)) {
+//                listener.onChunkEnd(chunkCounter, true);
+//                return false;
+//              }
             }
             // always skip any unconsumed event data to get the stream into consistent state
             chunkStream.position(eventStartPos + eventSize);

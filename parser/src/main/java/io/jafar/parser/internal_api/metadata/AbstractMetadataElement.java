@@ -15,7 +15,7 @@ public abstract class AbstractMetadataElement {
 
 //    private final Map<String, String> attributes = new HashMap<>(8, 0.75f);
 
-    private long id = -1;
+    private String id = "-1";
     private String name = null;
     private String simpleName = null;
     private final MetadataElementKind kind;
@@ -35,11 +35,11 @@ public abstract class AbstractMetadataElement {
 //        return attributes.getOrDefault(key, dflt);
 //    }
 
-    protected final void readSubelements(ElementReader reader) throws IOException {
+    protected final void readSubelements(MetadataEvent event) throws IOException {
         // now inspect all the enclosed elements
         int elemCount = (int) stream.readVarint();
         for (int i = 0; i < elemCount; i++) {
-            onSubelement(elemCount, reader.readElement(stream));
+            onSubelement(elemCount, event.readElement(stream));
         }
     }
 
@@ -49,35 +49,23 @@ public abstract class AbstractMetadataElement {
 
     protected void onAttribute(String key, String value) {}
 
-    static int[][] readAttributes(RecordingStream stream) throws IOException {
-        int attrCount = (int) stream.readVarint();
-        int [][] ret = new int[attrCount][2];
-        for (int i = 0; i < attrCount; i++) {
-            ret[i][0] = (int) stream.readVarint();
-            ret[i][1] = (int) stream.readVarint();
-        }
-        return ret;
-    }
-
     protected final void processAttributes() throws IOException {
-        int[][] attrs = readAttributes(stream);
-        for (int i = 0; i < attrs.length; i++) {
-            int[] attr = attrs[i];
-            String key = metadataLookup.getString(attr[0]);
-            String value = metadataLookup.getString(attr[1]);
-//            attributes.put(key, value);
+        int attrCount = (int) stream.readVarint();
+        for (int i = 0; i < attrCount; i++) {
+            String key = metadataLookup.getString((int) stream.readVarint());
+            String value = metadataLookup.getString((int) stream.readVarint());
             if ("name".equals(key)) {
                 name = value;
             }
             if ("id".equals(key)) {
-                id = Long.parseLong(value);
+                id = value;
             }
             onAttribute(key, value);
         }
     }
 
     public long getId() {
-        return id;
+        return Long.parseLong(id);
     }
 
     public String getName() {

@@ -6,8 +6,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public final class ParsingUtils {
-    private static final byte[] COMMON_BUFFER = new byte[4096]; // reusable byte buffer
-
     public static String bytesToString(byte[] array, int offset, int len) {
       StringBuilder sb = new StringBuilder("[");
       boolean comma = false;
@@ -36,7 +34,7 @@ public final class ParsingUtils {
       } else if (id == 3) {
         // UTF8
         int size = (int) stream.readVarint();
-        byte[] content = size <= COMMON_BUFFER.length ? COMMON_BUFFER : new byte[size];
+        byte[] content = size <= stream.getContext().byteBuffer.length ? stream.getContext().byteBuffer : new byte[size];
         stream.read(content, 0, size);
         return new String(content, 0, size, StandardCharsets.UTF_8);
       } else if (id == 4) {
@@ -49,7 +47,7 @@ public final class ParsingUtils {
       } else if (id == 5) {
         // LATIN1
         int size = (int) stream.readVarint();
-        byte[] content = size <= COMMON_BUFFER.length ? COMMON_BUFFER : new byte[size];
+        byte[] content = size <= stream.getContext().byteBuffer.length ? stream.getContext().byteBuffer : new byte[size];
         stream.read(content, 0, size);
         return new String(content, 0, size, StandardCharsets.ISO_8859_1);
       } else {

@@ -15,9 +15,9 @@ public final class MetadataAnnotation extends AbstractMetadataElement {
 
     public Long classId;
     public String value;
-    MetadataAnnotation(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataAnnotation(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.ANNOTATION);
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override
@@ -84,7 +84,10 @@ public final class MetadataAnnotation extends AbstractMetadataElement {
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            hashCode = Objects.hash(annotations, getClassId(), getValue());
+            long mixed = getClassId() * 0x9E3779B97F4A7C15L +
+                        Objects.hashCode(annotations) * 0xC6BC279692B5C323L +
+                        Objects.hashCode(getValue()) * 0xD8163841FDE6A8F9L;
+            hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }
         return hashCode;
