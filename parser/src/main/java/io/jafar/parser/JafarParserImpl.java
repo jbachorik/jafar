@@ -196,7 +196,7 @@ public final class JafarParserImpl implements JafarParser {
 
     private static CustomByteBuffer openJfrStream(Path jfrFile) {
         try {
-            return CustomByteBuffer.map(jfrFile, 2 * 1024 * 1024);
+            return CustomByteBuffer.map(jfrFile, Integer.MAX_VALUE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

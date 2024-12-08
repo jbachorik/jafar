@@ -44,7 +44,6 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
                 splices[i].order(ByteOrder.BIG_ENDIAN);
                 remaining -= spliceSize;
             }
-            splices[0].load();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

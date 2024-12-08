@@ -25,7 +25,12 @@ public final class MutableConstantPools implements ConstantPools {
     }
 
     public MutableConstantPool addOrGetConstantPool(RecordingStream chunkStream, long typeId, int count) {
-        return poolMap.computeIfAbsent(typeId, k -> new MutableConstantPool(chunkStream, k, count));
+        MutableConstantPool p = poolMap.get(typeId);
+        if (p == null) {
+            p = new MutableConstantPool(chunkStream, typeId, count);
+            poolMap.put(typeId, p);
+        }
+        return p;
     }
 
     @Override

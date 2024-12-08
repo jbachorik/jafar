@@ -26,15 +26,18 @@ public final class MutableConstantPool implements ConstantPool {
     public Object get(long id) {
         long offset = offsets.get(id);
         if (offset > 0) {
-            return entries.computeIfAbsent(id, k -> {
+            Object o = entries.get(id);
+            if (o == null) {
                 long pos = stream.position();
                 try {
-                    stream.position(offset);
-                    return clazz.read(stream);
+                    stream.position(offsets.get(id));
+                    o = clazz.read(stream);
+                    entries.put(id, o);
                 } finally {
                     stream.position(pos);
                 }
-            });
+            }
+            return o;
         }
         return null;
     }
