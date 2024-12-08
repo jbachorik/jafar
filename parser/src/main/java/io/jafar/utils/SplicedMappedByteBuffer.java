@@ -113,7 +113,7 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
         int loaded = 0;
         do {
             checkSpliceOffset();
-            int toLoad = Math.min(spliceSize, length - loaded);
+            int toLoad = (int)Math.min(spliceSize - this.offset, length - loaded);
             splices[index].get(this.offset, buffer, offset + loaded, toLoad);
             loaded += toLoad;
             this.offset += toLoad;

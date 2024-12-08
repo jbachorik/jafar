@@ -6,6 +6,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 public final class RecordingStream implements AutoCloseable {
@@ -155,6 +156,75 @@ public final class RecordingStream implements AutoCloseable {
     int b8 = delegate.get();// read last byte raw
     return ret + (((long) (b8 & 0XFF)) << 56);
   }
+
+  // TODO:
+  // Theoretically one 'long' read should be more efficient than 8 byte reads
+  // However, due to endianness diffrences this can be actually more expensive
+  // Leaving the code here in case I want to re-test on a platform where the data does not have to be converted
+  // due to endianness and maybe, if the benefit is significant, use a smart switch to use the best implementation
+  // for a platform
+
+//  public long readVarint1() throws IOException {
+//    long pos = delegate.position();
+//    long num = delegate.getLong();
+//    try {
+//      byte b0 = (byte)((num & 0xff00000000000000L) >> 56);
+//      pos++;
+//      long ret = (b0 & 0x7FL);
+//      if (b0 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b1 = (byte)((num & 0x00ff000000000000L) >> 48);
+//      ret += (b1 & 0x7FL) << 7;
+//      if (b1 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b2 = (byte)((num & 0x0000ff0000000000L) >> 40);
+//      ret += (b2 & 0x7FL) << 14;
+//      if (b2 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b3 = (byte)((num & 0x000000ff00000000L) >> 32);
+//      ret += (b3 & 0x7FL) << 21;
+//      if (b3 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b4 = (byte)((num & 0x00000000ff000000L) >> 24);;
+//      ret += (b4 & 0x7FL) << 28;
+//      if (b4 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b5 = (byte)((num & 0x0000000000ff0000L) >> 16);
+//      ret += (b5 & 0x7FL) << 35;
+//      if (b5 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b6 = (byte)((num & 0x000000000000ff00L) >> 8);
+//      ret += (b6 & 0x7FL) << 42;
+//      if (b6 >= 0) {
+//        return ret;
+//      }
+//      pos++;
+//      int b7 = (byte)((num & 0x00000000000000ffL));;
+//      ret += (b7 & 0x7FL) << 49;
+//      if (b7 >= 0) {
+//        return ret;
+//      }
+//      pos = -1;
+//      int b8 = delegate.get();// read last byte raw
+//      return ret + (((long) (b8 & 0XFF)) << 56);
+//    } finally {
+//      if (pos > -1) {
+//        delegate.position(pos);
+//      }
+//    }
+//  }
 
   public boolean readBoolean() throws IOException {
     return read() != 0;

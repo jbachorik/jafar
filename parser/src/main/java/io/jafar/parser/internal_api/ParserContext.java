@@ -3,8 +3,13 @@ package io.jafar.parser.internal_api;
 import io.jafar.parser.MutableConstantPools;
 import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.TypeFilter;
+import io.jafar.parser.internal_api.metadata.MetadataClass;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -19,17 +24,23 @@ public final class ParserContext {
     private final Map<String, Class<?>> classTargetTypeMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, WeakReference<?>> bag = new ConcurrentHashMap<>();
 
+    private Long2ObjectMap<Class<?>> classTypeMap = null;
+
+    private final ConcurrentMap<MetadataClass, Deserializer<?>> globalDeserializerCache;
+
     public ParserContext() {
         this.metadataLookup = new MutableMetadataLookup();
         this.constantPools = new MutableConstantPools(metadataLookup);
+        this.globalDeserializerCache = new ConcurrentHashMap<>();
 
         this.typeFilter = null;
         this.chunkIndex = 0;
     }
 
-    public ParserContext(TypeFilter typeFilter, int chunkIndex, MutableMetadataLookup metadataLookup, MutableConstantPools constantPools) {
+    public ParserContext(TypeFilter typeFilter, int chunkIndex, MutableMetadataLookup metadataLookup, MutableConstantPools constantPools, ConcurrentMap<MetadataClass, Deserializer<?>> deserializerCache) {
         this.metadataLookup = metadataLookup;
         this.constantPools = constantPools;
+        this.globalDeserializerCache = deserializerCache;
 
         this.typeFilter = typeFilter;
         this.chunkIndex = chunkIndex;
@@ -78,5 +89,17 @@ public final class ParserContext {
 
     public void bindDeserializers() {
         metadataLookup.bindDeserializers();
+    }
+
+    public void setClassTypeMap(Long2ObjectMap<Class<?>> map) {
+        classTypeMap = map;
+    }
+
+    public Long2ObjectMap<Class<?>> getClassTypeMap() {
+        return classTypeMap;
+    }
+
+    public ConcurrentMap<MetadataClass, Deserializer<?>> getDeserializerCache() {
+        return globalDeserializerCache;
     }
 }

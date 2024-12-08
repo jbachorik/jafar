@@ -88,9 +88,6 @@ public abstract class Deserializer<T> {
         @Override
         public void skip(RecordingStream stream) throws Exception {
             typeSkipper.skip(stream);
-
-            xxx do not use memory mapped files but progressively loaded byte buffer xxx
-
 //            try {
 //                skipHandler.invokeExact(stream);
 //            } catch (Throwable t) {
@@ -104,7 +101,11 @@ public abstract class Deserializer<T> {
             try {
                 if (deserializeHandler == null) {
                     // no deserialize method, skip
-                    skipHandler.invokeExact(stream);
+                    if (typeSkipper != null) {
+                        typeSkipper.skip(stream);
+                    } else {
+                        skipHandler.invokeExact(stream);
+                    }
                     // no value to return
                     return null;
                 }
@@ -112,6 +113,10 @@ public abstract class Deserializer<T> {
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
+        }
+
+        public boolean hasHandler() {
+            return deserializeHandler != null;
         }
     }
 

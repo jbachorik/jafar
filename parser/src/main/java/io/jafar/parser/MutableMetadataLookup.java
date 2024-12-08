@@ -1,11 +1,15 @@
 package io.jafar.parser;
 
+import io.jafar.parser.internal_api.Deserializer;
 import io.jafar.parser.internal_api.MetadataLookup;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 
 public final class MutableMetadataLookup implements MetadataLookup {
     private String[] strings;
@@ -22,7 +26,7 @@ public final class MutableMetadataLookup implements MetadataLookup {
     }
 
     public MetadataClass addClass(long id, MetadataClass clazz) {
-        return classes.computeIfAbsent(id, k -> clazz);
+        return classes.computeIfAbsent(id, (k) -> clazz);
     }
     public void setStringtable(String[] stringTable) {
         this.strings = Arrays.copyOf(stringTable, stringTable.length);
@@ -32,6 +36,7 @@ public final class MutableMetadataLookup implements MetadataLookup {
         for (MetadataClass clazz : classes.values()) {
             clazz.bindDeserializer();
         }
+//        System.out.println("Generated " + cnt + " classes");
     }
 
     public void clear() {

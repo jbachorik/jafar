@@ -9,57 +9,75 @@ import java.util.HashMap;
 import java.util.Map;
 
 public abstract class AbstractMetadataElement {
-
     private final RecordingStream stream;
 
     final MutableMetadataLookup metadataLookup;
 
-    private final Map<String, String> attributes;
+//    private final Map<String, String> attributes = new HashMap<>(8, 0.75f);
 
-    protected final String name;
+    private long id = -1;
+    private String name = null;
+    private String simpleName = null;
     private final MetadataElementKind kind;
 
     AbstractMetadataElement(RecordingStream stream, MetadataElementKind kind) throws IOException {
         this.stream = stream;
         this.kind = kind;
         this.metadataLookup = (MutableMetadataLookup) stream.getContext().getMetadataLookup();
-        this.attributes = processAttributes();
-        this.name = getAttribute("name");
+        processAttributes();
     }
     
-    protected final String getAttribute(String key) {
-        return attributes.get(key);
-    }
-
-    protected final String getAttribute(String key, String dflt) {
-        return attributes.getOrDefault(key, dflt);
-    }
-    
-    protected void resetAttributes() {
-        attributes.clear();
-    }
+//    protected final String getAttribute(String key) {
+//        return attributes.get(key);
+//    }
+//
+//    protected final String getAttribute(String key, String dflt) {
+//        return attributes.getOrDefault(key, dflt);
+//    }
 
     protected final void readSubelements(ElementReader reader) throws IOException {
         // now inspect all the enclosed elements
         int elemCount = (int) stream.readVarint();
         for (int i = 0; i < elemCount; i++) {
-            onSubelement(reader.readElement(stream));
+            onSubelement(elemCount, reader.readElement(stream));
         }
     }
 
-    protected void onSubelement(AbstractMetadataElement element) {}
+    protected void onSubelement(int count, AbstractMetadataElement element) {}
 
     abstract public void accept(MetadataVisitor visitor);
 
-    private Map<String, String> processAttributes() throws IOException {
-        Map<String, String> attributes = new HashMap<>();
+    protected void onAttribute(String key, String value) {}
+
+    static int[][] readAttributes(RecordingStream stream) throws IOException {
         int attrCount = (int) stream.readVarint();
+        int [][] ret = new int[attrCount][2];
         for (int i = 0; i < attrCount; i++) {
-            int keyPtr = (int) stream.readVarint();
-            int valPtr = (int) stream.readVarint();
-            attributes.put(metadataLookup.getString(keyPtr), metadataLookup.getString(valPtr));
+            ret[i][0] = (int) stream.readVarint();
+            ret[i][1] = (int) stream.readVarint();
         }
-        return attributes;
+        return ret;
+    }
+
+    protected final void processAttributes() throws IOException {
+        int[][] attrs = readAttributes(stream);
+        for (int i = 0; i < attrs.length; i++) {
+            int[] attr = attrs[i];
+            String key = metadataLookup.getString(attr[0]);
+            String value = metadataLookup.getString(attr[1]);
+//            attributes.put(key, value);
+            if ("name".equals(key)) {
+                name = value;
+            }
+            if ("id".equals(key)) {
+                id = Long.parseLong(value);
+            }
+            onAttribute(key, value);
+        }
+    }
+
+    public long getId() {
+        return id;
     }
 
     public String getName() {
@@ -67,8 +85,11 @@ public abstract class AbstractMetadataElement {
     }
 
     public String getSimpleName() {
-        int idx = name.lastIndexOf('.');
-        return idx == -1 ? name : name.substring(idx + 1);
+        if (simpleName == null) {
+            int idx = name.lastIndexOf('.');
+            simpleName = idx == -1 ? name : name.substring(idx + 1);
+        }
+        return simpleName;
     }
 
     public MetadataElementKind getKind() {

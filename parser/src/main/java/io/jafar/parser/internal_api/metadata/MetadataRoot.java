@@ -3,19 +3,22 @@ package io.jafar.parser.internal_api.metadata;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public final class MetadataRoot extends AbstractMetadataElement {
+    private boolean hasHashHascode = false;
+    private int hashCode;
+
     private MetadataElement metadata;
     private MetadataRegion region;
 
     MetadataRoot(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.ROOT);
-        resetAttributes();
         readSubelements(reader);
     }
 
     @Override
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.META) {
             metadata = (MetadataElement) element;
         } else if (element.getKind() == MetadataElementKind.REGION) {
@@ -36,5 +39,22 @@ public final class MetadataRoot extends AbstractMetadataElement {
     @Override
     public String toString() {
         return "MetadataRoot";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MetadataRoot that = (MetadataRoot) o;
+        return Objects.equals(metadata, that.metadata) && Objects.equals(region, that.region);
+    }
+
+    @Override
+    public int hashCode() {
+        if (!hasHashHascode) {
+            hashCode = Objects.hash(metadata, region);
+            hasHashHascode = true;
+        }
+        return hashCode;
     }
 }

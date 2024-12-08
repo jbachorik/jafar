@@ -18,6 +18,8 @@ import org.openjdk.jmc.flightrecorder.jdk.JdkAttributes;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAccumulator;
 
@@ -69,6 +71,7 @@ public class Main {
 
                 sum.accumulate(event.sampledThread().javaThreadId());
                 sum.accumulate(event.stackTrace().frames().length);
+                sum.accumulate(Arrays.stream(event.stackTrace().frames()).mapToLong(f -> Objects.hash(f.method().type().name().string(), f.method().name().string())).reduce(0, Long::sum));
                 cnt.incrementAndGet();
             });
 
@@ -83,6 +86,7 @@ public class Main {
                 if (e.getEventType().getName().equals("jdk.ExecutionSample")) {
                     sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
                     sum.accumulate(e.getStackTrace().getFrames().size());
+                    sum.accumulate(e.getStackTrace().getFrames().stream().mapToLong(f -> Objects.hash(f.getType(), f.getMethod().getName())).reduce(0, Long::sum));
                     cnt.incrementAndGet();
                 }
             }
@@ -96,6 +100,7 @@ public class Main {
         es.onEvent("jdk.ExecutionSample", e -> {
             sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
             sum.accumulate(e.getStackTrace().getFrames().size());
+            sum.accumulate(e.getStackTrace().getFrames().stream().mapToLong(f -> Objects.hash(f.getType(), f.getMethod().getName())).reduce(0, Long::sum));
             cnt.incrementAndGet();
         });
         es.start();

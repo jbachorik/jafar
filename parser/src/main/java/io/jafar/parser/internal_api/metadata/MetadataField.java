@@ -5,21 +5,36 @@ import io.jafar.parser.internal_api.RecordingStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public final class MetadataField extends AbstractMetadataElement {
-    private final List<MetadataAnnotation> annotations = new ArrayList<>();
-    private final long classId;
-    private final boolean hasConstantPool;
-    private final int dimension;
+    private boolean hasHashCode = false;
+    private int hashCode;
+
+    private List<MetadataAnnotation> annotations = null;
+    private long classId;
+    private boolean hasConstantPool;
+    private int dimension;
     private MetadataClass type = null;
 
     MetadataField(RecordingStream stream, ElementReader reader, boolean forceConstantPools) throws IOException {
         super(stream, MetadataElementKind.FIELD);
-        classId = Long.parseLong(getAttribute("class"));
-        hasConstantPool = forceConstantPools || Boolean.parseBoolean(getAttribute("constantPool"));
-        dimension = Integer.parseInt(getAttribute("dimension", "-1"));
-        resetAttributes();
         readSubelements(reader);
+    }
+
+    @Override
+    protected void onAttribute(String key, String value) {
+        switch (key) {
+            case "class":
+                classId = Long.parseLong(value);
+                break;
+            case "constantPool":
+                hasConstantPool = Boolean.parseBoolean(value);
+                break;
+            case "dimension":
+                dimension = value != null ? Integer.parseInt(value) : -1;
+                break;
+        }
     }
 
     public MetadataClass getType() {
@@ -44,8 +59,11 @@ public final class MetadataField extends AbstractMetadataElement {
     }
 
     @Override
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.ANNOTATION) {
+            if (annotations == null) {
+                annotations = new ArrayList<>(count);
+            }
             annotations.add((MetadataAnnotation) element);
         } else {
             throw new IllegalStateException("Unexpected subelement: " + element.getKind());
@@ -55,7 +73,9 @@ public final class MetadataField extends AbstractMetadataElement {
     @Override
     public void accept(MetadataVisitor visitor) {
         visitor.visitField(this);
-        annotations.forEach(a -> a.accept(visitor));
+        if (annotations != null) {
+            annotations.forEach(a -> a.accept(visitor));
+        }
         visitor.visitEnd(this);
     }
 
@@ -67,5 +87,22 @@ public final class MetadataField extends AbstractMetadataElement {
                 ", hasConstantPool=" + hasConstantPool +
                 ", dimension=" + dimension +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MetadataField that = (MetadataField) o;
+        return classId == that.classId && hasConstantPool == that.hasConstantPool && dimension == that.dimension;
+    }
+
+    @Override
+    public int hashCode() {
+        if (!hasHashCode) {
+            hashCode = Objects.hash(classId, hasConstantPool, dimension);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }

@@ -11,21 +11,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.Function;
 
 public final class MetadataClass extends AbstractMetadataElement {
+    private boolean hasHashCode = false;
+    private int hashCode;
+
     private static final Set<String> primitiveTypeNames = Set.of("byte", "char", "short", "int", "long", "float", "double", "boolean", "java.lang.String");
 
-    private final Map<String, MetadataSetting> settings = new HashMap<>();
-    private final List<MetadataAnnotation> annotations = new ArrayList<>();
-    private final Map<String, MetadataField> fieldMap = new HashMap<>();
-    private final List<MetadataField> fields = new ArrayList<>();
+    private Map<String, MetadataSetting> settings = null;
+    private List<MetadataAnnotation> annotations = null;
+    private List<MetadataField> fields = null;
 
-    private final long id;
-    private final String superType;
-    private final boolean isSimpleType;
-    private final boolean isPrimitive;
-    private final boolean simple;
+    private String superType;
+//    private final boolean isSimpleType;
+    private Boolean isPrimitive;
 
     private final int associatedChunk;
 
@@ -35,51 +38,56 @@ public final class MetadataClass extends AbstractMetadataElement {
 
     MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
         super(stream, MetadataElementKind.CLASS);
-        this.id = Long.parseLong(getAttribute("id"));
-        this.superType = getAttribute("superType");
-        this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
-        this.isPrimitive = primitiveTypeNames.contains(getName());
-        this.simple = isSimpleType || isPrimitive(name);
+//        this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
         this.associatedChunk = stream.getContext().getChunkIndex();
-        metadataLookup.addClass(id, this);
-        resetAttributes();
         readSubelements(reader);
+        metadataLookup.addClass(getId(), this);
+    }
+
+    @Override
+    protected void onAttribute(String key, String value) {
+        if (key.equals("superType")) {
+            superType = value;
+        }
     }
 
     public Deserializer<?> bindDeserializer() {
-        Deserializer<?> deserializer = Deserializer.forType(this);
-        return DESERIALIZER_UPDATER.compareAndSet(this, null, deserializer) ? deserializer : this.deserializer;
+        Deserializer<?> d =  DESERIALIZER_UPDATER.updateAndGet(this, v -> (v == null) ? getContext().getDeserializerCache().computeIfAbsent(MetadataClass.this, Deserializer::forType) : v);
+        return d;
     }
 
     public Deserializer<?> getDeserializer() {
         return deserializer;
     }
 
-    public long getId() {
-        return id;
-    }
-
     public String getSuperType() {
         return superType;
     }
 
-    public boolean isSimple() {
-        return simple;
-    }
-
     public boolean isPrimitive() {
+        if (isPrimitive == null) {
+            isPrimitive = primitiveTypeNames.contains(getName());
+        }
         return isPrimitive;
     }
 
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.SETTING) {
+            if (settings == null) {
+                settings = new HashMap<>(count * 2, 0.5f);
+            }
             MetadataSetting setting = (MetadataSetting) element;
             settings.put(setting.getName(), setting);
         } else if (element.getKind() == MetadataElementKind.ANNOTATION) {
+            if (annotations == null) {
+                annotations = new ArrayList<>(count);
+            }
             annotations.add((MetadataAnnotation) element);
         } else if (element.getKind() == MetadataElementKind.FIELD) {
+            if (fields == null) {
+                fields = new ArrayList<>(count);
+            }
             MetadataField field = (MetadataField) element;
-            fieldMap.put(field.getName(), field);
             fields.add(field);
         } else {
             throw new IllegalStateException("Unexpected subelement: " + element.getKind());
@@ -89,18 +97,20 @@ public final class MetadataClass extends AbstractMetadataElement {
     @Override
     public void accept(MetadataVisitor visitor) {
         visitor.visitClass(this);
-        settings.values().forEach(s -> s.accept(visitor));
-        annotations.forEach(a -> a.accept(visitor));
-        fieldMap.values().forEach(f -> f.accept(visitor));
+        if (settings != null) {
+            settings.values().forEach(s -> s.accept(visitor));
+        }
+        if (annotations != null) {
+            annotations.forEach(a -> a.accept(visitor));
+        }
+        if (fields != null) {
+            fields.forEach(f -> f.accept(visitor));
+        }
         visitor.visitEnd(this);
     }
 
     public List<MetadataField> getFields() {
-        return Collections.unmodifiableList(fields);
-    }
-
-    public Set<String> getFieldNames() {
-        return fieldMap.keySet();
+        return Collections.unmodifiableList(fields == null ? Collections.emptyList() : fields);
     }
 
     public void skip(RecordingStream stream) throws IOException {
@@ -139,26 +149,30 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     @Override
+    public String toString() {
+        return "MetadataClass{" +
+                "id='" + getId() + '\'' +
+                ", chunk=" + associatedChunk +
+                ", name='" + getName() + "'" +
+                ", superType='" + superType + '\'' +
+//                ", isSimpleType=" + isSimpleType +
+                '}';
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MetadataClass that = (MetadataClass) o;
-        return id == that.id && associatedChunk == that.associatedChunk;
+        return getId() == that.getId() && Objects.equals(getName(), that.getName()) && Objects.equals(superType, that.superType) && Objects.equals(fields, that.fields);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, associatedChunk);
-    }
-
-    @Override
-    public String toString() {
-        return "MetadataClass{" +
-                "id='" + id + '\'' +
-                ", chunk=" + associatedChunk +
-                ", name='" + getName() + "'" +
-                ", superType='" + superType + '\'' +
-                ", isSimpleType=" + isSimpleType +
-                '}';
+        if (!hasHashCode) {
+            hashCode = Objects.hash(getId(), getName(), superType, fields);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }

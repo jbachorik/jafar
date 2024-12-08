@@ -8,6 +8,7 @@ import io.jafar.parser.internal_api.RecordingStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -16,6 +17,8 @@ import java.util.Set;
  * <p>It contains the chunk specific type specifications
  */
 public final class MetadataEvent extends AbstractEvent {
+  private boolean hasHashCode = false;
+  private int hashCode;
 
   public final int size;
   public final long startTime;
@@ -60,7 +63,11 @@ public final class MetadataEvent extends AbstractEvent {
       int stringPtr = (int) stream.readVarint();
       String typeId = stream.getContext().getMetadataLookup().getString(stringPtr);
       AbstractMetadataElement element = switch (typeId) {
-        case "class" -> new MetadataClass(stream, this::readElement);
+        case "class" -> {
+          MetadataClass clz = new MetadataClass(stream, this::readElement);
+          classes.add(clz);
+          yield clz;
+        }
         case "field" -> new MetadataField(stream, this::readElement, forceConstantPools);
         case "annotation" -> new MetadataAnnotation(stream, this::readElement);
         case "root" -> new MetadataRoot(stream, this::readElement);
@@ -72,9 +79,6 @@ public final class MetadataEvent extends AbstractEvent {
         }
       };
 
-      if ("class".equals(typeId)) {
-        classes.add((MetadataClass) element);
-      }
       return element;
     } catch (Throwable t) {
       t.printStackTrace();
@@ -102,5 +106,22 @@ public final class MetadataEvent extends AbstractEvent {
         + ", metadataId="
         + metadataId
         + '}';
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    MetadataEvent that = (MetadataEvent) o;
+    return size == that.size && startTime == that.startTime && duration == that.duration && metadataId == that.metadataId && forceConstantPools == that.forceConstantPools && Objects.equals(root, that.root) && Objects.equals(classes, that.classes);
+  }
+
+  @Override
+  public int hashCode() {
+    if (!hasHashCode) {
+      hashCode = Objects.hash(size, startTime, duration, metadataId, root, classes, forceConstantPools);
+      hasHashCode = true;
+    }
+    return hashCode;
   }
 }

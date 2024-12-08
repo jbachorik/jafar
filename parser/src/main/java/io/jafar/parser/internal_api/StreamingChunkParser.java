@@ -155,7 +155,7 @@ public final class StreamingChunkParser implements AutoCloseable {
         MutableMetadataLookup metadataLookup = chunkMetadataLookup.computeIfAbsent(chunkCounter, k -> new MutableMetadataLookup());
         MutableConstantPools constantPools = chunkConstantPools.computeIfAbsent(chunkCounter, k -> new MutableConstantPools(metadataLookup));
 
-        RecordingStream chunkStream = stream.slice(header.offset, header.size, new ParserContext(stream.getContext().getTypeFilter(), chunkCounter, metadataLookup, constantPools));
+        RecordingStream chunkStream = stream.slice(header.offset, header.size, new ParserContext(stream.getContext().getTypeFilter(), chunkCounter, metadataLookup, constantPools, stream.getContext().getDeserializerCache()));
         stream.position(header.offset + header.size);
 
         results.add(submitParsingTask(header, chunkStream, listener, forceConstantPools, remainder));

@@ -61,7 +61,6 @@ public interface CustomByteBuffer {
         public ByteBufferWrapper(MappedByteBuffer delegate) {
             this.delegate = delegate;
             delegate.order(ByteOrder.BIG_ENDIAN);
-            delegate.load();
         }
 
         @Override

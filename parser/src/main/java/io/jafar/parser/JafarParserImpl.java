@@ -1,6 +1,5 @@
 package io.jafar.parser;
 
-import io.jafar.parser.api.Control;
 import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
 import io.jafar.parser.api.JfrIgnore;
@@ -21,11 +20,9 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.lang.invoke.MethodHandle;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
-import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,9 +48,6 @@ public final class JafarParserImpl implements JafarParser {
                     handlerMap.remove(clz);
 
                     handlerMap.keySet().forEach(JafarParserImpl.this::addDeserializer);
-                    chunkHandlerMethodMap.forEach((i, map) -> {
-                        map.remove(clz);
-                    });
                 }
             }
         }
@@ -65,10 +59,6 @@ public final class JafarParserImpl implements JafarParser {
     private final Int2ObjectMap<Long2ObjectMap<Class<?>>> chunkTypeClassMap = new Int2ObjectOpenHashMap<>();
 
     private final Map<String, Class<?>> globalDeserializerMap = new HashMap<>();
-    private final Int2ObjectMap<Map<Class<?>, MethodHandle>> chunkHandlerMethodMap = new Int2ObjectOpenHashMap<>();
-
-    private final ThreadLocal<Long2ObjectMap<Class<?>>> typeClassMapRef = new ThreadLocal<>();
-    private final ThreadLocal<Map<Class<?>, MethodHandle>> deserializerMethodMapRef = new ThreadLocal<>();
 
     private boolean closed = false;
 
@@ -138,8 +128,7 @@ public final class JafarParserImpl implements JafarParser {
             public boolean onChunkStart(int chunkIndex, ChunkHeader header, ParserContext context) {
                 if (!globalDeserializerMap.isEmpty()) {
                     synchronized (this) {
-                        typeClassMapRef.set(chunkTypeClassMap.computeIfAbsent(chunkIndex, k -> new Long2ObjectOpenHashMap<>()));
-                        deserializerMethodMapRef.set(chunkHandlerMethodMap.computeIfAbsent(chunkIndex, k -> new HashMap<>()));
+                        context.setClassTypeMap(chunkTypeClassMap.computeIfAbsent(chunkIndex, k -> new Long2ObjectOpenHashMap<>()));
 
                         context.addTargetTypeMap(globalDeserializerMap);
                     }
@@ -150,17 +139,15 @@ public final class JafarParserImpl implements JafarParser {
 
             @Override
             public boolean onChunkEnd(int chunkIndex, boolean skipped) {
-                typeClassMapRef.remove();
-                deserializerMethodMapRef.remove();
                 return true;
             }
 
             @Override
             public boolean onMetadata(MetadataEvent metadata) {
-                Long2ObjectMap<Class<?>> typeClassMap = typeClassMapRef.get();
+                Long2ObjectMap<Class<?>> typeClassMap = metadata.getContext().getClassTypeMap();
 
                 ParserContext context = metadata.getContext();
-                // typeClassMap must be fully intialized before trying to resolve/generate the handlers
+                // typeClassMap must be fully initialized before trying to resolve/generate the handlers
                 for (MetadataClass clz : metadata.getClasses()) {
                     Class<?> targetClass = context.getClassTargetType(clz.getName());
                     if (targetClass != null) {
@@ -179,7 +166,7 @@ public final class JafarParserImpl implements JafarParser {
 
             @Override
             public boolean onEvent(long typeId, RecordingStream stream, long payloadSize) {
-                Long2ObjectMap<Class<?>> typeClassMap = typeClassMapRef.get();
+                Long2ObjectMap<Class<?>> typeClassMap = stream.getContext().getClassTypeMap();
                 Class<?> typeClz = typeClassMap.get(typeId);
                 if (typeClz != null) {
                     if (handlerMap.containsKey(typeClz)) {
@@ -202,7 +189,6 @@ public final class JafarParserImpl implements JafarParser {
 
             parser.close();
             chunkTypeClassMap.clear();
-            chunkHandlerMethodMap.clear();
             handlerMap.clear();
             globalDeserializerMap.clear();
         }
