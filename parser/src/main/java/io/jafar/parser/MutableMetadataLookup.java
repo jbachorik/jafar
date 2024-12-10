@@ -26,8 +26,14 @@ public final class MutableMetadataLookup implements MetadataLookup {
     }
 
     public MetadataClass addClass(long id, MetadataClass clazz) {
-        return classes.computeIfAbsent(id, (k) -> clazz);
+        MetadataClass rslt = classes.get(id);
+        if (rslt == null) {
+            rslt = clazz;
+            classes.put(id, clazz);
+        }
+        return rslt;
     }
+
     public void setStringtable(String[] stringTable) {
         this.strings = Arrays.copyOf(stringTable, stringTable.length);
     }

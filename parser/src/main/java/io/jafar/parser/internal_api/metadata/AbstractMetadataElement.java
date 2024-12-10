@@ -52,13 +52,15 @@ public abstract class AbstractMetadataElement {
     protected final void processAttributes() throws IOException {
         int attrCount = (int) stream.readVarint();
         for (int i = 0; i < attrCount; i++) {
-            String key = metadataLookup.getString((int) stream.readVarint());
-            String value = metadataLookup.getString((int) stream.readVarint());
-            if ("name".equals(key)) {
-                name = value;
-            }
+            int kv = (int) stream.readVarint();
+            String key = metadataLookup.getString(kv);
+            int vv = (int) stream.readVarint();
+            String value = metadataLookup.getString(vv);
             if ("id".equals(key)) {
                 id = value;
+            }
+            if ("name".equals(key)) {
+                name = value;
             }
             onAttribute(key, value);
         }

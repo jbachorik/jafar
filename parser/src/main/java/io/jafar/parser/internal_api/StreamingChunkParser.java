@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -30,13 +31,13 @@ public final class StreamingChunkParser implements AutoCloseable {
   private final Int2ObjectMap<MutableMetadataLookup> chunkMetadataLookup = new Int2ObjectOpenHashMap<>();
   private final Int2ObjectMap<MutableConstantPools> chunkConstantPools = new Int2ObjectOpenHashMap<>();
 
-  private final ExecutorService executor = Executors.newFixedThreadPool(
-          Math.max(Runtime.getRuntime().availableProcessors() - 2, 1),
-          r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            return t;
-          });
+  private final ExecutorService executor = Executors.newFixedThreadPool(1);
+//          Math.max(Runtime.getRuntime().availableProcessors() - 2, 1),
+//          r -> {
+//            Thread t = new Thread(r);
+//            t.setDaemon(true);
+//            return t;
+//          });
 
   private boolean closed = false;
 
@@ -54,25 +55,24 @@ public final class StreamingChunkParser implements AutoCloseable {
    *   <li>listener.onRecordingEnd()</li>
    * </ol>
    *
-   * @param buffer the JFR recording buffer. If this buffer holds a filehandle,
-   *               the caller is responsible for freeing it.
+   * @param path the JFR recording path
    * @param listener the parser listener
    * @throws IOException
    */
-  public void parse(CustomByteBuffer buffer, ChunkParserListener listener) throws IOException {
+  public void parse(Path path, ChunkParserListener listener) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
-    try (RecordingStream stream = new RecordingStream(buffer)) {
+    try (RecordingStream stream = new RecordingStream(path)) {
       parse(stream, listener, false);
     }
   }
 
-  public void parse(CustomByteBuffer buffer, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
+  public void parse(Path path, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
-    try (RecordingStream stream = new RecordingStream(buffer)) {
+    try (RecordingStream stream = new RecordingStream(path)) {
       parse(stream, listener, forceConstantPools);
     }
   }

@@ -34,22 +34,31 @@ public final class ParsingUtils {
       } else if (id == 3) {
         // UTF8
         int size = (int) stream.readVarint();
+        if (size == 0) {
+          return "";
+        }
         byte[] content = size <= stream.getContext().byteBuffer.length ? stream.getContext().byteBuffer : new byte[size];
         stream.read(content, 0, size);
-        return new String(content, 0, size, StandardCharsets.UTF_8);
+        return stream.getContext().utf8Parser.parse(content, size, StandardCharsets.UTF_8);
       } else if (id == 4) {
         int size = (int) stream.readVarint();
-        char[] chars = new char[size];
+        if (size == 0) {
+          return "";
+        }
+        char[] chars = size <= stream.getContext().charBuffer.length ? stream.getContext().charBuffer : new char[size];
         for (int i = 0; i < size; i++) {
           chars[i] = (char) stream.readVarint();
         }
-        return new String(chars);
+        return stream.getContext().charParser.parse(chars, size);
       } else if (id == 5) {
         // LATIN1
         int size = (int) stream.readVarint();
+        if (size == 0) {
+          return "";
+        }
         byte[] content = size <= stream.getContext().byteBuffer.length ? stream.getContext().byteBuffer : new byte[size];
         stream.read(content, 0, size);
-        return new String(content, 0, size, StandardCharsets.ISO_8859_1);
+        return stream.getContext().utf8Parser.parse(content, size, StandardCharsets.ISO_8859_1);
       } else {
         throw new IOException("Unexpected string constant id: " + id);
       }

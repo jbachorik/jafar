@@ -4,51 +4,103 @@ import io.jafar.utils.CustomByteBuffer;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public final class RecordingStream implements AutoCloseable {
-  private final CustomByteBuffer delegate;
+  private final Path path;
+  private final RandomAccessFile file;
 
   private final ParserContext context;
+  private long mark = -1;
 
-  RecordingStream(CustomByteBuffer buffer) {
-    this(buffer, new ParserContext());
+  private final long offset;
+  private final long length;
+
+  private long position;
+
+  private static final int PAGE_SIZE = 4 * 1024 * 1024;
+  private final byte[] page = new byte[PAGE_SIZE + 10];
+  private final ByteBuffer pageBuffer = ByteBuffer.wrap(page);
+  private long currentPageAnchor;
+
+  RecordingStream(Path path) throws IOException {
+    this(path, 0, Files.size(path), new ParserContext());
   }
 
-  public RecordingStream slice(long pos, long len, ParserContext context) {
-    return new RecordingStream(delegate.slice(pos, len), context);
+  public RecordingStream slice(long pos, long len, ParserContext context) throws IOException {
+    return new RecordingStream(path, pos, len, context);
   }
 
-  public RecordingStream(CustomByteBuffer buffer, ParserContext context) {
-    if (buffer.order() == ByteOrder.LITTLE_ENDIAN) {
-      this.delegate = buffer.slice().order(ByteOrder.BIG_ENDIAN);
-    } else {
-      this.delegate = buffer;
-    }
+  public RecordingStream(Path path, long pos, long len, ParserContext context) throws IOException {
+    this.path = path;
+    this.file = new RandomAccessFile(path.toFile(), "r");
+    this.offset = pos;
+    this.length = Math.min(len, file.length() - offset);
+    this.file.seek(pos);
     this.context = context;
+
+    this.position = 0;
+    this.currentPageAnchor = 0;
+    file.read(page, 0, (int)Math.min(len, page.length));
   }
 
   public ParserContext getContext() {
     return context;
   }
 
-  public void position(long position) {
-    delegate.position(position);
+  public void position(long position) throws IOException {
+    this.position = position;
+    long diff = position - currentPageAnchor;
+    if (diff > PAGE_SIZE || diff < 0) {
+      file.seek(offset + position);
+      if (file.length() - (offset + position + Math.min(PAGE_SIZE, available())) < 0) {
+        System.out.println("xxx");
+      }
+      file.read(page, 0, (int)Math.min(PAGE_SIZE, available()));
+      pageBuffer.position(0);
+      currentPageAnchor = position;
+    } else {
+      pageBuffer.position((int)diff);
+    }
   }
 
-  public long position() {
-    return delegate.position();
+  public long position() throws IOException {
+    return position;
+  }
+
+  private void readPage() throws IOException {
+    int diff = (int)(position - currentPageAnchor);
+    if (diff > PAGE_SIZE) {
+      file.read(page, 0, page.length);
+      currentPageAnchor = position;
+      pageBuffer.position(0);
+    }
   }
 
   public void read(byte[] buffer, int offset, int length) throws IOException {
     try {
-      if (delegate.remaining() < length) {
+      if (available() < length) {
         throw new EOFException("unexpected EOF");
       }
-      delegate.get(buffer, offset, length);
+      int toRead = length - offset;
+      int targetDiff = (int)(position + toRead - currentPageAnchor);
+      if (targetDiff > PAGE_SIZE) {
+        int leftPart = toRead - targetDiff + PAGE_SIZE;
+        pageBuffer.get(buffer, offset, leftPart);
+        currentPageAnchor = position + leftPart;
+        file.read(page, 0, PAGE_SIZE);
+        pageBuffer.get(buffer, offset + leftPart, length - leftPart);
+      } else {
+        pageBuffer.get(buffer, offset, length);
+      }
+      position += length;
+
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -56,7 +108,10 @@ public final class RecordingStream implements AutoCloseable {
 
   public byte read() throws IOException {
     try {
-      return delegate.get();
+      byte b = pageBuffer.get();
+      position++;
+      readPage();
+      return b;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -64,7 +119,10 @@ public final class RecordingStream implements AutoCloseable {
 
   public short readShort() throws IOException {
     try {
-      return delegate.getShort();
+      short s = pageBuffer.getShort();
+      position += 2;
+      readPage();
+      return s;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -72,7 +130,10 @@ public final class RecordingStream implements AutoCloseable {
 
   public int readInt() throws IOException {
     try {
-      return delegate.getInt();
+      int i = pageBuffer.getInt();
+      position += 4;
+      readPage();
+      return i;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -80,7 +141,10 @@ public final class RecordingStream implements AutoCloseable {
 
   public long readLong() throws IOException {
     try {
-      return delegate.getLong();
+      long l = pageBuffer.getLong();
+      position += 8;
+      readPage();
+      return l;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -88,7 +152,10 @@ public final class RecordingStream implements AutoCloseable {
 
   public float readFloat() throws IOException {
     try {
-      return delegate.getFloat();
+      float f = pageBuffer.getFloat();
+      position += 4;
+      readPage();
+      return f;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
@@ -96,65 +163,71 @@ public final class RecordingStream implements AutoCloseable {
 
   public double readDouble() throws IOException {
     try {
-      return delegate.getDouble();
+      double d = pageBuffer.getDouble();
+      position += 8;
+      readPage();
+      return d;
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
   }
 
-  private long readFullLong() {
-    int offset = (int)(8 - delegate.remaining());
-    if (offset > 0) {
-      position(delegate.position() - offset);
-      return (delegate.getLong() & (0xffffffffffffffffL << offset * 8)) << offset * 8;
-    } else {
-      return delegate.getLong();
-    }
-  }
-
   public long readVarint() throws IOException {
-    byte b0 = delegate.get();
-    long ret = (b0 & 0x7FL);
-    if (b0 >= 0) {
-      return ret;
+    try {
+      byte b0 = pageBuffer.get();
+      position++;
+      long ret = (b0 & 0x7FL);
+      if (b0 >= 0) {
+        return ret;
+      }
+      int b1 = pageBuffer.get();
+      position++;
+      ret += (b1 & 0x7FL) << 7;
+      if (b1 >= 0) {
+        return ret;
+      }
+      int b2 = pageBuffer.get();
+      position++;
+      ret += (b2 & 0x7FL) << 14;
+      if (b2 >= 0) {
+        return ret;
+      }
+      int b3 = pageBuffer.get();
+      position++;
+      ret += (b3 & 0x7FL) << 21;
+      if (b3 >= 0) {
+        return ret;
+      }
+      int b4 = pageBuffer.get();
+      position++;
+      ret += (b4 & 0x7FL) << 28;
+      if (b4 >= 0) {
+        return ret;
+      }
+      int b5 = pageBuffer.get();
+      position++;
+      ret += (b5 & 0x7FL) << 35;
+      if (b5 >= 0) {
+        return ret;
+      }
+      int b6 = pageBuffer.get();
+      position++;
+      ret += (b6 & 0x7FL) << 42;
+      if (b6 >= 0) {
+        return ret;
+      }
+      int b7 = pageBuffer.get();
+      position++;
+      ret += (b7 & 0x7FL) << 49;
+      if (b7 >= 0) {
+        return ret;
+      }
+      int b8 = pageBuffer.get();// read last byte raw
+      position++;
+      return ret + (((long) (b8 & 0XFF)) << 56);
+    } finally {
+      readPage();
     }
-    int b1 = delegate.get();
-    ret += (b1 & 0x7FL) << 7;
-    if (b1 >= 0) {
-      return ret;
-    }
-    int b2 = delegate.get();
-    ret += (b2 & 0x7FL) << 14;
-    if (b2 >= 0) {
-      return ret;
-    }
-    int b3 = delegate.get();
-    ret += (b3 & 0x7FL) << 21;
-    if (b3 >= 0) {
-      return ret;
-    }
-    int b4 = delegate.get();
-    ret += (b4 & 0x7FL) << 28;
-    if (b4 >= 0) {
-      return ret;
-    }
-    int b5 = delegate.get();
-    ret += (b5 & 0x7FL) << 35;
-    if (b5 >= 0) {
-      return ret;
-    }
-    int b6 = delegate.get();
-    ret += (b6 & 0x7FL) << 42;
-    if (b6 >= 0) {
-      return ret;
-    }
-    int b7 = delegate.get();
-    ret += (b7 & 0x7FL) << 49;
-    if (b7 >= 0) {
-      return ret;
-    }
-    int b8 = delegate.get();// read last byte raw
-    return ret + (((long) (b8 & 0XFF)) << 56);
   }
 
   // TODO:
@@ -217,7 +290,7 @@ public final class RecordingStream implements AutoCloseable {
 //        return ret;
 //      }
 //      pos = -1;
-//      int b8 = delegate.get();// read last byte raw
+//      int b8 = (byte)file.read();// read last byte raw
 //      return ret + (((long) (b8 & 0XFF)) << 56);
 //    } finally {
 //      if (pos > -1) {
@@ -227,30 +300,41 @@ public final class RecordingStream implements AutoCloseable {
 //  }
 
   public boolean readBoolean() throws IOException {
-    return read() != 0;
+    boolean b = pageBuffer.get() == 1 ? true : false;
+    position++;
+    readPage();
+    return b;
   }
 
-  public long available() {
-    return delegate.remaining();
+  public long available() throws IOException {
+    return length - position;
   }
 
   public void skip(int bytes) throws IOException {
     try {
-      delegate.position(delegate.position() + bytes);
+      position(position + bytes);
     } catch (BufferUnderflowException | BufferOverflowException e) {
       throw new IOException(e);
     }
   }
 
-  public void mark() {
-    delegate.mark();
+  public void mark() throws IOException {
+    mark = position;
+    if (mark > length) {
+      System.out.println("xxx");
+    }
   }
 
-  public void reset() {
-    delegate.reset();
+  public void reset() throws IOException {
+    if (mark > -1) {
+      position(mark);
+    }
   }
 
   @Override
   public void close() {
+    try {
+      file.close();
+    } catch (IOException ignored) {}
   }
 }

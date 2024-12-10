@@ -12,9 +12,13 @@ public final class MetadataField extends AbstractMetadataElement {
     private int hashCode;
 
     private List<MetadataAnnotation> annotations = null;
-    private long classId;
-    private boolean hasConstantPool;
-    private int dimension;
+    private Long classId;
+    private String classIdVal;
+    private Boolean hasConstantPool;
+    private String hasConstantPoolVal;
+    private Integer dimension;
+    private String dimensionVal;
+
     private MetadataClass type = null;
 
     MetadataField(RecordingStream stream, MetadataEvent event, boolean forceConstantPools) throws IOException {
@@ -26,13 +30,13 @@ public final class MetadataField extends AbstractMetadataElement {
     protected void onAttribute(String key, String value) {
         switch (key) {
             case "class":
-                classId = Long.parseLong(value);
+                classIdVal = value;
                 break;
             case "constantPool":
-                hasConstantPool = Boolean.parseBoolean(value);
+                hasConstantPoolVal = value;
                 break;
             case "dimension":
-                dimension = value != null ? Integer.parseInt(value) : -1;
+                dimensionVal = value;
                 break;
         }
     }
@@ -41,20 +45,29 @@ public final class MetadataField extends AbstractMetadataElement {
         // all events from a single chunk, referencing a particular type will be procesed in a single thread
         // therefore, we are not risiking data race here
         if (type == null) {
-            type = metadataLookup.getClass(classId);
+            type = metadataLookup.getClass(getTypeId());
         }
         return type;
     }
 
     public long getTypeId() {
+        if (classId == null) {
+            classId = Long.parseLong(classIdVal);
+        }
         return classId;
     }
 
     public boolean hasConstantPool() {
+        if (hasConstantPool == null) {
+            hasConstantPool = Boolean.parseBoolean(hasConstantPoolVal);
+        }
         return hasConstantPool;
     }
 
     public int getDimension() {
+        if (dimension == null) {
+            dimension = dimensionVal != null ? Integer.parseInt(dimensionVal) : -1;
+        }
         return dimension;
     }
 
@@ -82,7 +95,7 @@ public final class MetadataField extends AbstractMetadataElement {
     @Override
     public String toString() {
         return "MetadataField{" +
-                "type='" + (getType() != null ? getType().getName() : classId) + '\'' +
+                "type='" + (getType() != null ? getType().getName() : getTypeId()) + '\'' +
                 ", name='" + getName() + "'" +
                 ", hasConstantPool=" + hasConstantPool +
                 ", dimension=" + dimension +
@@ -94,13 +107,13 @@ public final class MetadataField extends AbstractMetadataElement {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MetadataField that = (MetadataField) o;
-        return classId == that.classId && hasConstantPool == that.hasConstantPool && dimension == that.dimension;
+        return getTypeId() == that.getTypeId() && hasConstantPool() == that.hasConstantPool() && getDimension() == that.getDimension();
     }
 
     @Override
     public int hashCode() {
         if (!hasHashCode) {
-            long mixed = classId * 0x9E3779B97F4A7C15L + (hasConstantPool ? 1 : 0) * 0xC6BC279692B5C323L + dimension * 0xD8163841FDE6A8F9L;
+            long mixed = getTypeId() * 0x9E3779B97F4A7C15L + (hasConstantPool() ? 1 : 0) * 0xC6BC279692B5C323L + getDimension() * 0xD8163841FDE6A8F9L;
             hashCode = Long.hashCode(mixed);
             hasHashCode = true;
         }

@@ -4,15 +4,16 @@ import io.jafar.parser.MutableConstantPools;
 import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.TypeFilter;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
+import io.jafar.utils.CachedStringParser;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.ref.WeakReference;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 public final class ParserContext {
     private final MutableMetadataLookup metadataLookup;
@@ -26,9 +27,49 @@ public final class ParserContext {
 
     private Long2ObjectMap<Class<?>> classTypeMap = null;
 
-    private final ConcurrentMap<MetadataClass, Deserializer<?>> globalDeserializerCache;
+    public static class DeserializerKey {
+        private final long id;
+        private final String name;
+        private final String superType;
+        private final List<String> fieldNames;
 
+        public DeserializerKey(MetadataClass clz) {
+            this.id = clz.getId();
+            this.name = clz.getName();
+            this.superType = clz.getSuperType();
+            this.fieldNames = clz.getFields().stream().map(f -> f.getType().getName() + ":" + f.getName()).toList();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DeserializerKey that = (DeserializerKey) o;
+            return id == that.id && Objects.equals(name, that.name) && Objects.equals(superType, that.superType) && Objects.equals(fieldNames, that.fieldNames);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, name, superType, fieldNames);
+        }
+
+        @Override
+        public String toString() {
+            return "DeserializerKey{" +
+                    "id=" + id +
+                    ", name='" + name + '\'' +
+                    ", superType='" + superType + '\'' +
+                    ", fieldNames=" + fieldNames +
+                    '}';
+        }
+    }
+
+    private final ConcurrentMap<DeserializerKey, Deserializer<?>> globalDeserializerCache;
+
+    public final CachedStringParser.ByteArrayParser utf8Parser = CachedStringParser.byteParser();
+    public final CachedStringParser.CharArrayParser charParser = CachedStringParser.charParser();
     public final byte[] byteBuffer = new byte[4096];
+    public final char[] charBuffer = new char[4096];
 
     public ParserContext() {
         this.metadataLookup = new MutableMetadataLookup();
@@ -39,7 +80,7 @@ public final class ParserContext {
         this.chunkIndex = 0;
     }
 
-    public ParserContext(TypeFilter typeFilter, int chunkIndex, MutableMetadataLookup metadataLookup, MutableConstantPools constantPools, ConcurrentMap<MetadataClass, Deserializer<?>> deserializerCache) {
+    public ParserContext(TypeFilter typeFilter, int chunkIndex, MutableMetadataLookup metadataLookup, MutableConstantPools constantPools, ConcurrentMap<DeserializerKey, Deserializer<?>> deserializerCache) {
         this.metadataLookup = metadataLookup;
         this.constantPools = constantPools;
         this.globalDeserializerCache = deserializerCache;
@@ -101,7 +142,7 @@ public final class ParserContext {
         return classTypeMap;
     }
 
-    public ConcurrentMap<MetadataClass, Deserializer<?>> getDeserializerCache() {
+    public ConcurrentMap<DeserializerKey, Deserializer<?>> getDeserializerCache() {
         return globalDeserializerCache;
     }
 

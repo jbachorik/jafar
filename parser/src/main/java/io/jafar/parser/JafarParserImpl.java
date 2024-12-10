@@ -116,7 +116,7 @@ public final class JafarParserImpl implements JafarParser {
             throw new IOException("Parser is closed");
         }
         // parse JFR and run handlers
-        parser.parse(openJfrStream(recording), new ChunkParserListener() {
+        parser.parse(recording, new ChunkParserListener() {
             @Override
             public void onRecordingStart(ParserContext context) {
                 if (!globalDeserializerMap.isEmpty()) {

@@ -216,9 +216,6 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
     @Override
     public void reset() {
         position = mark;
-        if (position < 0) {
-            System.out.println("xxx");
-        }
         index = (int)((position + sliceBase) / spliceSize);
         offset = (int)((position + sliceBase) % spliceSize);
     }

@@ -6,8 +6,11 @@ import io.jafar.parser.MutableMetadataLookup;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -25,7 +28,7 @@ public final class MetadataEvent extends AbstractEvent {
   public final long duration;
   public final long metadataId;
   private final MetadataRoot root;
-  private final Set<MetadataClass> classes = new HashSet<>();
+  private final List<MetadataClass> classes = new ArrayList<>(200);
 
   private final boolean forceConstantPools;
 
@@ -110,8 +113,8 @@ public final class MetadataEvent extends AbstractEvent {
     return root;
   }
 
-  public Set<MetadataClass> getClasses() {
-    return Collections.unmodifiableSet(classes);
+  public Collection<MetadataClass> getClasses() {
+    return Collections.unmodifiableCollection(classes);
   }
 
   @Override

@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 
 final class CodeGenerator {
 
-    private static final boolean LOGS_ENABLED = true;
+    private static final boolean LOGS_ENABLED = false;
     private static final Logger log = LoggerFactory.getLogger(CodeGenerator.class);
 
     private static void addLog(MethodVisitor mv, String msg) {

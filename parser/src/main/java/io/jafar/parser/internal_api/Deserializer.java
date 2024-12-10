@@ -87,12 +87,15 @@ public abstract class Deserializer<T> {
 
         @Override
         public void skip(RecordingStream stream) throws Exception {
-            typeSkipper.skip(stream);
-//            try {
-//                skipHandler.invokeExact(stream);
-//            } catch (Throwable t) {
-//                throw new RuntimeException(t);
-//            }
+            if (skipHandler != null) {
+                try {
+                    skipHandler.invokeExact(stream);
+                } catch (Throwable t) {
+                    throw new RuntimeException(t);
+                }
+            } else {
+                typeSkipper.skip(stream);
+            }
         }
 
         @SuppressWarnings("unchecked")

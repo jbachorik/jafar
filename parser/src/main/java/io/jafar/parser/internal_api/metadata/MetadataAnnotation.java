@@ -13,7 +13,8 @@ public final class MetadataAnnotation extends AbstractMetadataElement {
 
     private List<MetadataAnnotation> annotations = null;
 
-    public Long classId;
+    private Long classId = null;
+    private String classIdVal = null;
     public String value;
     MetadataAnnotation(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.ANNOTATION);
@@ -24,7 +25,7 @@ public final class MetadataAnnotation extends AbstractMetadataElement {
     protected void onAttribute(String key, String value) {
         switch (key) {
             case "class":
-                classId = Long.parseLong(value);
+                classIdVal = value;
                 break;
             case "value":
                 this.value = value;
@@ -37,6 +38,9 @@ public final class MetadataAnnotation extends AbstractMetadataElement {
     }
 
     public long getClassId() {
+        if (classId == null) {
+            classId = Long.parseLong(classIdVal);
+        }
         return classId;
     }
 

@@ -8,6 +8,8 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
+import java.io.IOException;
+
 public final class MutableConstantPool implements ConstantPool {
     private final Long2LongMap offsets;
     private final Long2ObjectMap<Object> entries;
@@ -24,20 +26,24 @@ public final class MutableConstantPool implements ConstantPool {
     }
 
     public Object get(long id) {
-        long offset = offsets.get(id);
-        if (offset > 0) {
-            Object o = entries.get(id);
-            if (o == null) {
-                long pos = stream.position();
-                try {
-                    stream.position(offsets.get(id));
-                    o = clazz.read(stream);
-                    entries.put(id, o);
-                } finally {
-                    stream.position(pos);
+        try {
+            long offset = offsets.get(id);
+            if (offset > 0) {
+                Object o = entries.get(id);
+                if (o == null) {
+                    long pos = stream.position();
+                    try {
+                        stream.position(offsets.get(id));
+                        o = clazz.read(stream);
+                        entries.put(id, o);
+                    } finally {
+                        stream.position(pos);
+                    }
                 }
+                return o;
             }
-            return o;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         return null;
     }
