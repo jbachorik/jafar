@@ -18,16 +18,18 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
     private long mark = 0;
     private final long limit;
     private final long sliceBase;
+    private final boolean nativeOrder;
 
     private final MappedByteBuffer[] splices;
 
-    SplicedMappedByteBuffer(MappedByteBuffer[] splices, int spliceSize, int sliceOffset, int sliceIndex, long limit) {
+    SplicedMappedByteBuffer(MappedByteBuffer[] splices, int spliceSize, int sliceOffset, int sliceIndex, long limit, boolean nativeOrder) {
         this.splices = splices;
         this.index = sliceIndex;
         this.offset = sliceOffset;
         this.spliceSize = spliceSize;
         this.limit = limit;
         this.sliceBase = (long)index * spliceSize + offset;
+        this.nativeOrder = nativeOrder;
     }
 
     SplicedMappedByteBuffer(Path file, int spliceSize) throws IOException {
@@ -36,14 +38,17 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
         limit = Files.size(file);
         int count = (int)(((long)spliceSize + limit - 1) / spliceSize);
         splices = new MappedByteBuffer[count];
+        boolean inOrder = true;
         try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r");
             FileChannel channel = raf.getChannel()) {
             long remaining = limit;
             for (int i = 0; i  < count; i++) {
                 splices[i] = channel.map(FileChannel.MapMode.READ_ONLY, (long)i * spliceSize, (long)Math.min(spliceSize, remaining));
+                inOrder &= splices[i].order() == ByteOrder.nativeOrder();
                 splices[i].order(ByteOrder.nativeOrder()); // force native order
                 remaining -= spliceSize;
             }
+            this.nativeOrder = inOrder;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -51,12 +56,12 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
 
     @Override
     public boolean isNativeOrder() {
-        return true;
+        return nativeOrder;
     }
 
     @Override
     public CustomByteBuffer slice() {
-        return new SplicedMappedByteBuffer(splices, spliceSize, offset, index, remaining());
+        return new SplicedMappedByteBuffer(splices, spliceSize, offset, index, remaining(), nativeOrder);
     }
 
     @Override
@@ -66,7 +71,7 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
         }
         int realIndex = (int)((sliceBase + pos) / spliceSize);
         int realOffset = (int)((sliceBase + pos) % spliceSize);
-        return new SplicedMappedByteBuffer(splices, spliceSize, realOffset, realIndex, len);
+        return new SplicedMappedByteBuffer(splices, spliceSize, realOffset, realIndex, len, nativeOrder);
     }
 
     @Override
