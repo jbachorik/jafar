@@ -31,6 +31,8 @@ public interface CustomByteBuffer {
     CustomByteBuffer order(ByteOrder bigEndian);
     ByteOrder order();
 
+    boolean isNativeOrder();
+
     void position(long position);
 
     long position();
@@ -57,16 +59,21 @@ public interface CustomByteBuffer {
 
     class ByteBufferWrapper implements CustomByteBuffer {
         private final MappedByteBuffer delegate;
+        private final boolean nativeOrder;
 
         public ByteBufferWrapper(MappedByteBuffer delegate) {
             this.delegate = delegate;
-            delegate.order(ByteOrder.BIG_ENDIAN);
+            this.nativeOrder = delegate.order() == ByteOrder.nativeOrder();
+            delegate.order(ByteOrder.nativeOrder());
+        }
+
+        @Override
+        public boolean isNativeOrder() {
+            return nativeOrder;
         }
 
         @Override
         public CustomByteBuffer slice(long pos, long len) {
-            assert(pos <= Integer.MAX_VALUE);
-            assert(len <= Integer.MAX_VALUE);
             return new ByteBufferWrapper(delegate.slice((int)pos, (int)len));
         }
 
@@ -76,8 +83,9 @@ public interface CustomByteBuffer {
         }
 
         @Override
-        public CustomByteBuffer order(ByteOrder bigEndian) {
-            return new ByteBufferWrapper((MappedByteBuffer) delegate.order(bigEndian));
+        public CustomByteBuffer order(ByteOrder order) {
+            delegate.order(order);
+            return this;
         }
 
         @Override
@@ -87,63 +95,85 @@ public interface CustomByteBuffer {
 
         @Override
         public void position(long position) {
-            assert(position <= Integer.MAX_VALUE);
             delegate.position((int)position);
+//            this.position = (int) position;
         }
 
         @Override
         public long position() {
-            return delegate.position();
+            return delegate.position(); //position;
         }
 
         @Override
         public long remaining() {
-            return delegate.remaining();
+            return delegate.remaining(); //length - position;
         }
 
         @Override
         public void get(byte[] buffer, int offset, int length) {
             delegate.get(buffer, offset, length);
+//            delegate.get(position, buffer, offset, length);
+//            position += length;
         }
 
         @Override
         public byte get() {
             return delegate.get();
+//            return delegate.get(position++);
         }
 
         @Override
         public short getShort() {
             return delegate.getShort();
+//            short s = delegate.getShort(position);
+//            position += 2;
+//            return s;
         }
 
         @Override
         public int getInt() {
             return delegate.getInt();
+//            int i = delegate.getInt(position);
+//            position += 4;
+//            return i;
         }
 
         @Override
         public float getFloat() {
             return delegate.getFloat();
+//            float f = delegate.getFloat(position);
+//            position += 4;
+//            return f;
         }
 
         @Override
         public double getDouble() {
             return delegate.getDouble();
+//            double d = delegate.getDouble(position);
+//            position += 8;
+//            return d;
         }
 
         @Override
         public long getLong() {
             return delegate.getLong();
+//            long l = delegate.getLong(position);
+//            position += 8;
+//            return l;
         }
 
         @Override
         public void mark() {
             delegate.mark();
+//            mark = position;
         }
 
         @Override
         public void reset() {
             delegate.reset();
+//            if (mark > -1) {
+//                position = mark;
+//            }
         }
     }
 }

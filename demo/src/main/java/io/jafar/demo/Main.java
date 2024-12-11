@@ -5,8 +5,8 @@ import io.jafar.parser.api.JafarParser;
 import io.jafar.parser.api.types.JFRExecutionSample;
 import jdk.jfr.consumer.EventStream;
 import jdk.jfr.consumer.RecordedEvent;
+import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingFile;
-import org.checkerframework.checker.units.qual.A;
 import org.openjdk.jmc.common.item.IItem;
 import org.openjdk.jmc.common.item.IItemCollection;
 import org.openjdk.jmc.common.item.IItemIterable;
@@ -20,10 +20,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.LongSummaryStatistics;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAccumulator;
 
 public class Main {
@@ -67,25 +67,15 @@ public class Main {
 
     private static void runWithJafar(File file, LongAccumulator sum, AtomicInteger cnt) throws Exception {
         try (JafarParser p = JafarParser.open(file.getPath())) {
-            LongSummaryStatistics ls = new LongSummaryStatistics();
-//            HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
-//                ls.accept(event.stackTrace().frames().length);
-//            });
-//            p.run();
-//            h1.destroy(p);
+            HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
+                if (event.sampledThread() == null) {
+                    throw new RuntimeException();
+                }
 
-//            long avg = ls.getSum() / ls.getCount();
-            HandlerRegistration<ExecutionSampleEvent> h2 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
-//                if (event.stackTrace().frames().length >= avg) {
-                    if (event.sampledThread() == null) {
-                        throw new RuntimeException();
-                    }
-
-                    sum.accumulate(event.sampledThread().javaThreadId());
-//                    sum.accumulate(event.stackTrace().frames().length);
-                    //                sum.accumulate(Arrays.stream(event.stackTrace().frames()).mapToLong(f -> Objects.hash(f.method().type().name().string(), f.method().name().string())).reduce(0, Long::sum));
-                    cnt.incrementAndGet();
-//                }
+                sum.accumulate(event.sampledThread().javaThreadId());
+                sum.accumulate(event.stackTrace().frames().length);
+//                sum.accumulate(Arrays.stream(event.stackTrace().frames()).mapToLong(f -> Objects.hash(f.method().type().name().string(), f.method().name().string())).reduce(0, Long::sum));
+                cnt.incrementAndGet();
             });
 
             p.run();
@@ -97,9 +87,10 @@ public class Main {
             while (recording.hasMoreEvents()) {
                 RecordedEvent e = recording.readEvent();
                 if (e.getEventType().getName().equals("jdk.ExecutionSample")) {
-                    sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
-//                        sum.accumulate(e.getStackTrace().getFrames().size());
-                    //                    sum.accumulate(e.getStackTrace().getFrames().stream().mapToLong(f -> Objects.hash(f.getType(), f.getMethod().getName())).reduce(0, Long::sum));
+                    RecordedThread thread = e.getThread("sampledThread");
+                    sum.accumulate(thread.getJavaThreadId());
+                    sum.accumulate(e.getStackTrace().getFrames().size());
+//                    sum.accumulate(e.getStackTrace().getFrames().stream().mapToLong(f -> Objects.hash(f.getType(), f.getMethod().getName())).reduce(0, Long::sum));
                     cnt.incrementAndGet();
                 }
             }
@@ -112,7 +103,7 @@ public class Main {
         es.setOrdered(false);
         es.onEvent("jdk.ExecutionSample", e -> {
             sum.accumulate(e.getThread("sampledThread").getJavaThreadId());
-//            sum.accumulate(e.getStackTrace().getFrames().size());
+            sum.accumulate(e.getStackTrace().getFrames().size());
 //            sum.accumulate(e.getStackTrace().getFrames().stream().mapToLong(f -> Objects.hash(f.getType(), f.getMethod().getName())).reduce(0, Long::sum));
             cnt.incrementAndGet();
         });

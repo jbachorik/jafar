@@ -41,12 +41,17 @@ public final class SplicedMappedByteBuffer implements CustomByteBuffer {
             long remaining = limit;
             for (int i = 0; i  < count; i++) {
                 splices[i] = channel.map(FileChannel.MapMode.READ_ONLY, (long)i * spliceSize, (long)Math.min(spliceSize, remaining));
-                splices[i].order(ByteOrder.BIG_ENDIAN);
+                splices[i].order(ByteOrder.nativeOrder()); // force native order
                 remaining -= spliceSize;
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public boolean isNativeOrder() {
+        return true;
     }
 
     @Override
