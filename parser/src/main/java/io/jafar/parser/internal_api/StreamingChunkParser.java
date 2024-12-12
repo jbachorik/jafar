@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -54,25 +54,24 @@ public final class StreamingChunkParser implements AutoCloseable {
    *   <li>listener.onRecordingEnd()</li>
    * </ol>
    *
-   * @param buffer the JFR recording buffer. If this buffer holds a filehandle,
-   *               the caller is responsible for freeing it.
+   * @param path the JFR recording path
    * @param listener the parser listener
    * @throws IOException
    */
-  public void parse(ByteBuffer buffer, ChunkParserListener listener) throws IOException {
+  public void parse(Path path, ChunkParserListener listener) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
-    try (RecordingStream stream = new RecordingStream(buffer)) {
+    try (RecordingStream stream = new RecordingStream(path)) {
       parse(stream, listener, false);
     }
   }
 
-  public void parse(ByteBuffer buffer, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
+  public void parse(Path path, ChunkParserListener listener, boolean forceConstantPools) throws IOException {
     if (closed) {
       throw new IllegalStateException("Parser is closed");
     }
-    try (RecordingStream stream = new RecordingStream(buffer)) {
+    try (RecordingStream stream = new RecordingStream(path)) {
       parse(stream, listener, forceConstantPools);
     }
   }
@@ -87,7 +86,7 @@ public final class StreamingChunkParser implements AutoCloseable {
     }
   }
 
-  private Future<Boolean> submitParsingTask(ChunkHeader chunkHeader, RecordingStream chunkStream, ChunkParserListener listener, boolean forceConstantPools, int remainder) {
+  private Future<Boolean> submitParsingTask(ChunkHeader chunkHeader, RecordingStream chunkStream, ChunkParserListener listener, boolean forceConstantPools, long remainder) {
     return executor.submit(() -> {
       int chunkCounter = chunkHeader.order;
       try {
@@ -113,7 +112,7 @@ public final class StreamingChunkParser implements AutoCloseable {
         }
         chunkStream.position(remainder);
         while (chunkStream.position() < chunkHeader.size) {
-          int eventStartPos = chunkStream.position();
+          long eventStartPos = chunkStream.position();
           chunkStream.mark(); // max 2 varints ahead
           int eventSize = (int) chunkStream.readVarint();
           if (eventSize > 0) {
@@ -151,11 +150,11 @@ public final class StreamingChunkParser implements AutoCloseable {
       int chunkCounter = 1;
       while (stream.available() > 0) {
         ChunkHeader header = new ChunkHeader(stream, chunkCounter);
-        int remainder = (stream.position() - header.offset);
+        long remainder = (stream.position() - header.offset);
         MutableMetadataLookup metadataLookup = chunkMetadataLookup.computeIfAbsent(chunkCounter, k -> new MutableMetadataLookup());
         MutableConstantPools constantPools = chunkConstantPools.computeIfAbsent(chunkCounter, k -> new MutableConstantPools(metadataLookup));
 
-        RecordingStream chunkStream = stream.slice(header.offset, header.size, new ParserContext(stream.getContext().getTypeFilter(), chunkCounter, metadataLookup, constantPools));
+        RecordingStream chunkStream = stream.slice(header.offset, header.size, new ParserContext(stream.getContext().getTypeFilter(), chunkCounter, metadataLookup, constantPools, stream.getContext().getDeserializerCache()));
         stream.position(header.offset + header.size);
 
         results.add(submitParsingTask(header, chunkStream, listener, forceConstantPools, remainder));

@@ -1,31 +1,25 @@
 package io.jafar.parser.internal_api;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.nio.BufferOverflowException;
-import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.nio.file.Path;
 
 public final class RecordingStream implements AutoCloseable {
-  private final ByteBuffer delegate;
+  private final RecordingStreamReader reader;
 
   private final ParserContext context;
+  private long mark = -1;
 
-  RecordingStream(ByteBuffer buffer) {
-    this(buffer, new ParserContext());
+
+  RecordingStream(Path path) throws IOException {
+    this(RecordingStreamReader.mapped(path), new ParserContext());
   }
 
-  public RecordingStream slice(int pos, int len, ParserContext context) {
-    return new RecordingStream(delegate.slice(pos, len), context);
+  public RecordingStream slice(long pos, long len, ParserContext context) {
+    return new RecordingStream(reader.slice(pos, len), context);
   }
 
-  private RecordingStream(ByteBuffer buffer, ParserContext context) {
-    if (buffer.order() == ByteOrder.LITTLE_ENDIAN) {
-      this.delegate = buffer.slice().order(ByteOrder.BIG_ENDIAN);
-    } else {
-      this.delegate = buffer;
-    }
+  public RecordingStream(RecordingStreamReader reader, ParserContext context) {
+    this.reader = reader;
     this.context = context;
   }
 
@@ -33,153 +27,76 @@ public final class RecordingStream implements AutoCloseable {
     return context;
   }
 
-  public void position(int position) {
-    delegate.position(position);
+  public void position(long position) {
+    reader.position(position);
   }
 
-  public int position() {
-    return delegate.position();
+  public long position() {
+    return reader.position();
   }
 
-  public void read(byte[] buffer, int offset, int length) throws IOException {
-    try {
-      if (delegate.remaining() < length) {
-        throw new EOFException("unexpected EOF");
-      }
-      delegate.get(buffer, offset, length);
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
+  public void read(byte[] buffer, int offset, int length) {
+    if (available() < length) {
+      throw new RuntimeException("unexpected EOF");
     }
+    reader.read(buffer, offset, length);
   }
 
-  public byte read() throws IOException {
-    try {
-      return delegate.get();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public byte read() {
+    return reader.read();
   }
 
-  public short readShort() throws IOException {
-    try {
-      return delegate.getShort();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public short readShort() {
+    return reader.readShort();
   }
 
-  public int readInt() throws IOException {
-    try {
-      return delegate.getInt();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public int readInt() {
+    return reader.readInt();
   }
 
-  public long readLong() throws IOException {
-    try {
-      return delegate.getLong();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public long readLong() {
+    return reader.readLong();
   }
 
-  public float readFloat() throws IOException {
-    try {
-      return delegate.getFloat();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public float readFloat() {
+    return reader.readFloat();
   }
 
-  public double readDouble() throws IOException {
-    try {
-      return delegate.getDouble();
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public double readDouble()  {
+    return reader.readDouble();
   }
 
-  private long readFullLong() {
-    int offset = 8 - delegate.remaining();
-    if (offset > 0) {
-      position(delegate.position() - offset);
-      return (delegate.getLong() & (0xffffffffffffffffL << offset * 8)) << offset * 8;
-    } else {
-      return delegate.getLong();
-    }
+  public long readVarint() {
+    return reader.readVarint();
+  }
+  
+  public boolean readBoolean() {
+    return reader.readBoolean();
   }
 
-  public long readVarint() throws IOException {
-    byte b0 = delegate.get();
-    long ret = (b0 & 0x7FL);
-    if (b0 >= 0) {
-      return ret;
-    }
-    int b1 = delegate.get();
-    ret += (b1 & 0x7FL) << 7;
-    if (b1 >= 0) {
-      return ret;
-    }
-    int b2 = delegate.get();
-    ret += (b2 & 0x7FL) << 14;
-    if (b2 >= 0) {
-      return ret;
-    }
-    int b3 = delegate.get();
-    ret += (b3 & 0x7FL) << 21;
-    if (b3 >= 0) {
-      return ret;
-    }
-    int b4 = delegate.get();
-    ret += (b4 & 0x7FL) << 28;
-    if (b4 >= 0) {
-      return ret;
-    }
-    int b5 = delegate.get();
-    ret += (b5 & 0x7FL) << 35;
-    if (b5 >= 0) {
-      return ret;
-    }
-    int b6 = delegate.get();
-    ret += (b6 & 0x7FL) << 42;
-    if (b6 >= 0) {
-      return ret;
-    }
-    int b7 = delegate.get();
-    ret += (b7 & 0x7FL) << 49;
-    if (b7 >= 0) {
-      return ret;
-    }
-    int b8 = delegate.get();// read last byte raw
-    return ret + (((long) (b8 & 0XFF)) << 56);
+  public long available() {
+    return reader.remaining();
   }
 
-  public boolean readBoolean() throws IOException {
-    return read() != 0;
-  }
-
-  public int available() {
-    return delegate.remaining();
-  }
-
-  public void skip(int bytes) throws IOException {
-    try {
-      delegate.position(delegate.position() + bytes);
-    } catch (BufferUnderflowException | BufferOverflowException e) {
-      throw new IOException(e);
-    }
+  public void skip(int bytes) {
+    reader.skip(bytes);
   }
 
   public void mark() {
-    delegate.mark();
+    mark = reader.position();
   }
 
   public void reset() {
-    delegate.reset();
+    if (mark > -1) {
+      position(mark);
+      mark = -1;
+    }
   }
 
   @Override
   public void close() {
+    try {
+      reader.close();
+    } catch (IOException ignored) {}
   }
 }
