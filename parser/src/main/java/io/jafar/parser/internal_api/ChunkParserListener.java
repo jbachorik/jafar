@@ -3,7 +3,7 @@ package io.jafar.parser.internal_api;
 import io.jafar.parser.internal_api.metadata.MetadataEvent;
 
 /**
- * A callback to be provided to {@linkplain StreamingChunkParser#parse(java.nio.ByteBuffer, ChunkParserListener)}
+ * A callback to be provided to {@linkplain StreamingChunkParser#parse(java.nio.file.Path, ChunkParserListener)}
  */
 public interface ChunkParserListener {
   /** Called when the recording starts to be processed */
