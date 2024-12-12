@@ -1,0 +1,20 @@
+name: Publish Snapshot
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  publish-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        run: |
+          ./gradlew publish

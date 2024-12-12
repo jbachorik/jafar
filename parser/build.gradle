@@ -1,7 +1,11 @@
 plugins {
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id("io.github.goooler.shadow") version "8.1.8"
     id 'java'
+    id 'maven-publish'
 }
+
+def libraryName="jafar-parser"
+def component_version = project.hasProperty("jafar_version") ? project.jafar_version : rootProject.version
 
 repositories {
     mavenCentral()
@@ -17,7 +21,7 @@ dependencies {
     implementation 'org.slf4j:slf4j-api:2.0.5'
     implementation 'org.slf4j:slf4j-simple:2.0.5'
     implementation 'it.unimi.dsi:fastutil:8.5.12'
-    implementation 'org.ow2.asm:asm:9.5'
+    implementation 'org.ow2.asm:asm:9.7.1'
 
     testImplementation 'org.openjdk.jmc:flightrecorder.writer:8.2.1'
     testImplementation 'org.mockito:mockito-core:5.12.0'
@@ -31,4 +35,40 @@ test {
 //    jvmArgs '-Xmx8g', '-Xms1g', '-XX:+HeapDumpOnOutOfMemoryError', '-XX:HeapDumpPath=build/heapdump.hprof'
     jvmArgs '-Xmx8g', '-Xms1g'
     useJUnitPlatform()
+}
+
+tasks.register('sourcesJar', Jar) {
+    from sourceSets.main.allJava
+    archiveBaseName = libraryName
+    archiveClassifier = "sources"
+    archiveVersion = component_version
+}
+
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
+    archiveBaseName = libraryName
+    archiveClassifier = 'javadoc'
+    archiveVersion = component_version
+    from javadoc.destinationDir
+}
+
+publishing {
+    publications {
+        assembled(MavenPublication) { publication ->
+            publication.groupId = 'io.btrace'
+            publication.artifactId = 'jafar-parser'
+            publication.version = component_version
+        }
+    }
+}
+
+shadowJar {
+    group 'Build'
+    archiveBaseName = libraryName
+    archiveVersion = component_version
+    archiveClassifier.set('')
+
+    relocate 'it.unimi.dsi.fastutil', 'io.jafar.libs.it.unimi.dsi.fastutil'
+    relocate 'org.objectweb.asm', 'io.jafar.libs.org.objectweb.asm'
+    relocate 'org.slf4j', 'io.jafar.libs.org.slf4j'
 }

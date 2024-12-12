@@ -1,5 +1,21 @@
+plugins {
+    id "com.diffplug.spotless" version "6.11.0"
+    id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
+}
+
+project.version="0.0.1-SNAPSHOT"
+
 repositories {
     mavenCentral()
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            username = project.hasProperty("sonatype.user") ? project.property("sonatype.user") : System.getenv("SONATYPE_USERNAME")
+            password = project.hasProperty("sonatype.password") ? project.property("sonatype.password") : System.getenv("SONATYPE_PASSWORD")
+        }
+    }
 }
 
 
