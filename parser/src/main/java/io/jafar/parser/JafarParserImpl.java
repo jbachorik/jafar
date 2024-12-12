@@ -1,6 +1,5 @@
 package io.jafar.parser;
 
-import io.jafar.parser.api.Control;
 import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
 import io.jafar.parser.api.JfrIgnore;
@@ -14,20 +13,15 @@ import io.jafar.parser.internal_api.RecordingStream;
 import io.jafar.parser.internal_api.StreamingChunkParser;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import io.jafar.parser.internal_api.metadata.MetadataEvent;
+import io.jafar.utils.CustomByteBuffer;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.lang.invoke.MethodHandle;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -121,7 +115,7 @@ public final class JafarParserImpl implements JafarParser {
             throw new IOException("Parser is closed");
         }
         // parse JFR and run handlers
-        parser.parse(openJfrStream(recording), new ChunkParserListener() {
+        parser.parse(recording, new ChunkParserListener() {
             @Override
             public void onRecordingStart(ParserContext context) {
                 if (!globalDeserializerMap.isEmpty()) {
@@ -199,13 +193,9 @@ public final class JafarParserImpl implements JafarParser {
         }
     }
 
-    private static ByteBuffer openJfrStream(Path jfrFile) {
-        try (RandomAccessFile raf = new RandomAccessFile(jfrFile.toFile(), "r");
-             FileChannel channel = raf.getChannel()) {
-            MappedByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, raf.length());
-            buf.order(ByteOrder.BIG_ENDIAN);
-            buf.load();
-            return buf;
+    private static CustomByteBuffer openJfrStream(Path jfrFile) {
+        try {
+            return CustomByteBuffer.map(jfrFile, Integer.MAX_VALUE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
