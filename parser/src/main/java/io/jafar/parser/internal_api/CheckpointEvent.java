@@ -49,10 +49,10 @@ public final class CheckpointEvent extends AbstractEvent {
                 int count = (int) stream.readVarint();
                 MetadataClass clz = context.getMetadataLookup().getClass(typeId);
                 boolean skip = skipAll || (typeFilter != null && !typeFilter.test(clz));
+                MutableConstantPool constantPool = skip ? null : ((MutableConstantPools) context.getConstantPools()).addOrGetConstantPool(stream, typeId, count);
                 for (int j = 0; j < count; j++) {
                     long id = stream.readVarint();
-                    if (!skip) {
-                        MutableConstantPool constantPool = ((MutableConstantPools) context.getConstantPools()).addOrGetConstantPool(stream, typeId);
+                    if (!skip && !constantPool.containsKey(id)) {
                         constantPool.addOffset(id, stream.position());
                     }
                     clz.skip(stream);
