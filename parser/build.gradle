@@ -58,6 +58,10 @@ publishing {
             publication.groupId = 'io.btrace'
             publication.artifactId = 'jafar-parser'
             publication.version = component_version
+
+            publication.artifact shadowJar
+            publication.artifact sourcesJar
+            publication.artifact javadocJar
         }
     }
 }
