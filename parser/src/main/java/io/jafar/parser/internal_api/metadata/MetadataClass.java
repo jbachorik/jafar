@@ -1,6 +1,7 @@
 package io.jafar.parser.internal_api.metadata;
 
 import io.jafar.parser.internal_api.Deserializer;
+import io.jafar.parser.internal_api.ParserContext;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
@@ -14,18 +15,18 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 public final class MetadataClass extends AbstractMetadataElement {
+    private boolean hasHashCode = false;
+    private int hashCode;
+
     private static final Set<String> primitiveTypeNames = Set.of("byte", "char", "short", "int", "long", "float", "double", "boolean", "java.lang.String");
 
-    private final Map<String, MetadataSetting> settings = new HashMap<>();
-    private final List<MetadataAnnotation> annotations = new ArrayList<>();
-    private final Map<String, MetadataField> fieldMap = new HashMap<>();
-    private final List<MetadataField> fields = new ArrayList<>();
+    private Map<String, MetadataSetting> settings = null;
+    private List<MetadataAnnotation> annotations = null;
+    private List<MetadataField> fields = null;
 
-    private final long id;
-    private final String superType;
-    private final boolean isSimpleType;
-    private final boolean isPrimitive;
-    private final boolean simple;
+    private String superType;
+//    private final boolean isSimpleType;
+    private Boolean isPrimitive;
 
     private final int associatedChunk;
 
@@ -33,53 +34,56 @@ public final class MetadataClass extends AbstractMetadataElement {
     private static final AtomicReferenceFieldUpdater<MetadataClass, Deserializer> DESERIALIZER_UPDATER = AtomicReferenceFieldUpdater.newUpdater(MetadataClass.class, Deserializer.class, "deserializer");
     private volatile Deserializer<?> deserializer;
 
-    MetadataClass(RecordingStream stream, ElementReader reader) throws IOException {
+    MetadataClass(RecordingStream stream, MetadataEvent eventr) throws IOException {
         super(stream, MetadataElementKind.CLASS);
-        this.id = Long.parseLong(getAttribute("id"));
-        this.superType = getAttribute("superType");
-        this.isSimpleType = Boolean.parseBoolean(getAttribute("simpleType"));
-        this.isPrimitive = primitiveTypeNames.contains(getName());
-        this.simple = isSimpleType || isPrimitive(name);
         this.associatedChunk = stream.getContext().getChunkIndex();
-        metadataLookup.addClass(id, this);
-        resetAttributes();
-        readSubelements(reader);
+        readSubelements(eventr);
+        metadataLookup.addClass(getId(), this);
+    }
+
+    @Override
+    protected void onAttribute(String key, String value) {
+        if (key.equals("superType")) {
+            superType = value;
+        }
     }
 
     public Deserializer<?> bindDeserializer() {
-        Deserializer<?> deserializer = Deserializer.forType(this);
-        return DESERIALIZER_UPDATER.compareAndSet(this, null, deserializer) ? deserializer : this.deserializer;
+        return DESERIALIZER_UPDATER.updateAndGet(this, v -> (v == null) ? getContext().getDeserializerCache().computeIfAbsent(new ParserContext.DeserializerKey(MetadataClass.this), k -> Deserializer.forType(MetadataClass.this)) : v);
     }
 
     public Deserializer<?> getDeserializer() {
         return deserializer;
     }
 
-    public long getId() {
-        return id;
-    }
-
     public String getSuperType() {
         return superType;
     }
 
-    public boolean isSimple() {
-        return simple;
-    }
-
     public boolean isPrimitive() {
+        if (isPrimitive == null) {
+            isPrimitive = primitiveTypeNames.contains(getName());
+        }
         return isPrimitive;
     }
 
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.SETTING) {
+            if (settings == null) {
+                settings = new HashMap<>(count * 2, 0.5f);
+            }
             MetadataSetting setting = (MetadataSetting) element;
             settings.put(setting.getName(), setting);
         } else if (element.getKind() == MetadataElementKind.ANNOTATION) {
+            if (annotations == null) {
+                annotations = new ArrayList<>(count);
+            }
             annotations.add((MetadataAnnotation) element);
         } else if (element.getKind() == MetadataElementKind.FIELD) {
+            if (fields == null) {
+                fields = new ArrayList<>(count);
+            }
             MetadataField field = (MetadataField) element;
-            fieldMap.put(field.getName(), field);
             fields.add(field);
         } else {
             throw new IllegalStateException("Unexpected subelement: " + element.getKind());
@@ -89,18 +93,20 @@ public final class MetadataClass extends AbstractMetadataElement {
     @Override
     public void accept(MetadataVisitor visitor) {
         visitor.visitClass(this);
-        settings.values().forEach(s -> s.accept(visitor));
-        annotations.forEach(a -> a.accept(visitor));
-        fieldMap.values().forEach(f -> f.accept(visitor));
+        if (settings != null) {
+            settings.values().forEach(s -> s.accept(visitor));
+        }
+        if (annotations != null) {
+            annotations.forEach(a -> a.accept(visitor));
+        }
+        if (fields != null) {
+            fields.forEach(f -> f.accept(visitor));
+        }
         visitor.visitEnd(this);
     }
 
     public List<MetadataField> getFields() {
-        return Collections.unmodifiableList(fields);
-    }
-
-    public Set<String> getFieldNames() {
-        return fieldMap.keySet();
+        return Collections.unmodifiableList(fields == null ? Collections.emptyList() : fields);
     }
 
     public void skip(RecordingStream stream) throws IOException {
@@ -139,26 +145,33 @@ public final class MetadataClass extends AbstractMetadataElement {
     }
 
     @Override
+    public String toString() {
+        return "MetadataClass{" +
+                "id='" + getId() + '\'' +
+                ", chunk=" + associatedChunk +
+                ", name='" + getName() + "'" +
+                ", superType='" + superType + '\'' +
+                '}';
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MetadataClass that = (MetadataClass) o;
-        return id == that.id && associatedChunk == that.associatedChunk;
+        return getId() == that.getId() && Objects.equals(getName(), that.getName()) && Objects.equals(superType, that.superType) && Objects.equals(fields, that.fields);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, associatedChunk);
-    }
-
-    @Override
-    public String toString() {
-        return "MetadataClass{" +
-                "id='" + id + '\'' +
-                ", chunk=" + associatedChunk +
-                ", name='" + getName() + "'" +
-                ", superType='" + superType + '\'' +
-                ", isSimpleType=" + isSimpleType +
-                '}';
+        if (!hasHashCode) {
+            long mixed = getId() * 0x9E3779B97F4A7C15L
+                    + getName().hashCode() * 0xC6BC279692B5C323L
+                    + Objects.hashCode(superType) * 0xD8163841FDE6A8F9L
+                    + Objects.hashCode(fields) * 0xA3B195354A39B70DL;
+            hashCode = Long.hashCode(mixed);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }
