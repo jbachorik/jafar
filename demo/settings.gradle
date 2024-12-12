@@ -17,6 +17,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'jafar'
-include ':parser'
-include ':gradle-plugin'
+rootProject.name = 'demo'

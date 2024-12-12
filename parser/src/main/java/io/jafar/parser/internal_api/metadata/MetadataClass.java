@@ -25,8 +25,9 @@ public final class MetadataClass extends AbstractMetadataElement {
     private List<MetadataField> fields = null;
 
     private String superType;
-//    private final boolean isSimpleType;
     private Boolean isPrimitive;
+    private Boolean isSimpleType;
+    private String simpleTypeVal;
 
     private final int associatedChunk;
 
@@ -45,13 +46,20 @@ public final class MetadataClass extends AbstractMetadataElement {
     protected void onAttribute(String key, String value) {
         if (key.equals("superType")) {
             superType = value;
+        } else if (key.equals("simpleType")) {
+            simpleTypeVal = value;
         }
     }
 
-    public Deserializer<?> bindDeserializer() {
-        return DESERIALIZER_UPDATER.updateAndGet(this, v -> (v == null) ? getContext().getDeserializerCache().computeIfAbsent(new ParserContext.DeserializerKey(MetadataClass.this), k -> Deserializer.forType(MetadataClass.this)) : v);
+    public void bindDeserializer() {
+        DESERIALIZER_UPDATER.updateAndGet(this, v -> (v == null) ? getContext().getDeserializerCache().computeIfAbsent(new ParserContext.DeserializerKey(MetadataClass.this), k -> Deserializer.forType(MetadataClass.this)) : v);
     }
 
+    /**
+     * Get the associated deserializer.
+     * Used in the generated handler classes.
+     * @return the associated deserializer
+     */
     public Deserializer<?> getDeserializer() {
         return deserializer;
     }
@@ -65,6 +73,13 @@ public final class MetadataClass extends AbstractMetadataElement {
             isPrimitive = primitiveTypeNames.contains(getName());
         }
         return isPrimitive;
+    }
+
+    public boolean isSimpleType() {
+        if (isSimpleType == null) {
+            isSimpleType = Boolean.parseBoolean(simpleTypeVal);
+        }
+        return isSimpleType;
     }
 
     protected void onSubelement(int count, AbstractMetadataElement element) {

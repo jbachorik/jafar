@@ -4,7 +4,7 @@ import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
 import io.jafar.parser.api.JfrIgnore;
 import io.jafar.parser.api.JfrType;
-import io.jafar.parser.api.types.JFRHandler;
+import io.jafar.parser.api.JFRHandler;
 import io.jafar.parser.internal_api.CheckpointEvent;
 import io.jafar.parser.internal_api.ChunkHeader;
 import io.jafar.parser.internal_api.ChunkParserListener;
@@ -18,6 +18,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import jdk.jfr.FlightRecorder;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
