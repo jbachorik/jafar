@@ -77,18 +77,24 @@ public abstract class Deserializer<T> {
     public static final class Generated<T> extends Deserializer<T> {
         private final MethodHandle skipHandler;
         private final MethodHandle deserializeHandler;
+        private final TypeSkipper typeSkipper;
 
-        public Generated(MethodHandle deserializeHandler, MethodHandle skipHandler) {
+        public Generated(MethodHandle deserializeHandler, MethodHandle skipHandler, TypeSkipper skipper) {
             this.deserializeHandler = deserializeHandler;
             this.skipHandler = skipHandler;
+            this.typeSkipper = skipper;
         }
 
         @Override
         public void skip(RecordingStream stream) throws Exception {
-            try {
-                skipHandler.invokeExact(stream);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
+            if (skipHandler != null) {
+                try {
+                    skipHandler.invokeExact(stream);
+                } catch (Throwable t) {
+                    throw new RuntimeException(t);
+                }
+            } else {
+                typeSkipper.skip(stream);
             }
         }
 
@@ -98,7 +104,7 @@ public abstract class Deserializer<T> {
             try {
                 if (deserializeHandler == null) {
                     // no deserialize method, skip
-                    skipHandler.invokeExact(stream);
+                    skip(stream);
                     // no value to return
                     return null;
                 }
