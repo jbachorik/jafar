@@ -1,11 +1,13 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id "io.github.goooler.shadow" version "8.1.8"
+    id 'io.btrace.jafar-gradle-plugin' version '0.0.1-SNAPSHOT'
 }
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
 
 java {
@@ -29,7 +31,7 @@ tasks.build {
 }
 
 dependencies {
-    implementation project(':parser')
+    implementation 'io.btrace:jafar-parser:0.0.1-SNAPSHOT'
     implementation 'org.jctools:jctools-core:4.0.1'
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.5'
     implementation 'org.openjdk.jmc:flightrecorder:8.3.1'

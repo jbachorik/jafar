@@ -1,6 +1,5 @@
 package io.jafar.parser.api;
 import io.jafar.parser.JafarParserImpl;
-import io.jafar.parser.api.types.JFRHandler;
 
 import java.io.IOException;
 import java.nio.file.Paths;

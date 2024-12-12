@@ -1,0 +1,90 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'groovy'
+    id 'maven-publish'
+}
+
+group = "io.btrace"
+version = project.hasProperty("jafar_version") ? project.jafar_version : rootProject.version
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation gradleApi() // Provides the Gradle API, including Plugin
+    implementation localGroovy()
+
+    implementation project(':parser')
+    implementation 'org.jctools:jctools-core:4.0.1'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.5'
+    implementation 'org.openjdk.jmc:flightrecorder:8.3.1'
+}
+
+gradlePlugin {
+    plugins {
+        create("jafarGradlePlugin") {
+            id = "io.btrace.jafar-gradle-plugin"
+            implementationClass = "io.jafar.gradle.TypeGeneratorPlugin"
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('sourcesJar', Jar) {
+    from sourceSets.main.allJava
+    archiveBaseName = libraryName
+    archiveClassifier = "sources"
+    archiveVersion = component_version
+}
+
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
+    archiveBaseName = libraryName
+    archiveClassifier = 'javadoc'
+    archiveVersion = component_version
+    from javadoc.destinationDir
+}
+
+publishing {
+    publications {
+        pluginMaven(MavenPublication) {
+            artifactId = "jafar-gradle-plugin" // Set your custom artifact ID
+        }
+    }
+}
+
+//publishing {
+//    publications {
+//        pluginMaven(MavenPublication) { publication ->
+//            publication.groupId = 'io.btrace'
+//            publication.artifactId = 'jafar-gradle-plugin'
+//            publication.version = component_version
+//
+//            publication.artifact jar
+//            publication.artifact sourcesJar
+//            publication.artifact javadocJar
+//        }
+//    }
+//}
+
+//publishing {
+//    publications {
+//        pluginMaven(MavenPublication) {
+//            from gradlePlugin
+//        }
+//    }
+//}

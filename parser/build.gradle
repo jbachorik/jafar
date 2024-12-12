@@ -1,3 +1,5 @@
+import jdk.jfr.FlightRecorder
+
 plugins {
     id("io.github.goooler.shadow") version "8.1.8"
     id 'java'
@@ -8,7 +10,11 @@ def libraryName="jafar-parser"
 def component_version = project.hasProperty("jafar_version") ? project.jafar_version : rootProject.version
 
 repositories {
+    mavenLocal()
     mavenCentral()
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
 }
 
 java {

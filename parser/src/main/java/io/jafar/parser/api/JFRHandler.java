@@ -1,11 +1,8 @@
-package io.jafar.parser.api.types;
-
-import io.jafar.parser.api.Control;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+package io.jafar.parser.api;
 
 @FunctionalInterface
 public interface JFRHandler<T> {
-    static class Impl<T> {
+    class Impl<T> {
         private final Class<T> clazz;
         private final JFRHandler<T> handler;
 

@@ -87,14 +87,16 @@ public abstract class Deserializer<T> {
 
         @Override
         public void skip(RecordingStream stream) throws Exception {
-            if (skipHandler != null) {
+            if (typeSkipper != null) {
+                typeSkipper.skip(stream);
+            } else if (skipHandler != null) {
                 try {
                     skipHandler.invokeExact(stream);
                 } catch (Throwable t) {
                     throw new RuntimeException(t);
                 }
             } else {
-                typeSkipper.skip(stream);
+                throw new RuntimeException("Unsupported skip handler type");
             }
         }
 

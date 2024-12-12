@@ -59,13 +59,12 @@ final class CodeGenerator {
         }
     }
 
-    static void handleFieldRef(ClassVisitor cv, String clzName, MetadataField field, Class<?> fldType, String fldName, String methodName) {
+    static void handleFieldRef(ClassVisitor cv, String clzName, long typeId, boolean isArray, Class<?> fldType, String fldName, String methodName) {
         if (fldType == null) {
             // field is never accessed directly, can skip the rest
             return;
         }
         clzName = clzName.replace('.', '/');
-        boolean isArray = field.getDimension() > 0;
         String fldRefName = fldName + "_ref";
         String fldCpName = fldName + "_cp";
         String mthdCpName = fldCpName + "$get";
@@ -85,7 +84,7 @@ final class CodeGenerator {
         mv.visitInsn(Opcodes.DUP); // stack: [this, this]
         mv.visitFieldInsn(Opcodes.GETFIELD, clzName, "context", Type.getDescriptor(ParserContext.class)); // stack: [this, context]
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(ParserContext.class), "getConstantPools", Type.getMethodDescriptor(Type.getType(ConstantPools.class)), false); // stack: [this, pools]
-        mv.visitLdcInsn(field.getTypeId()); // stack: [this, pools, type]
+        mv.visitLdcInsn(typeId); // stack: [this, pools, type]
         mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(ConstantPools.class), "getConstantPool", Type.getMethodDescriptor(Type.getType(ConstantPool.class), Type.LONG_TYPE), true); // stack: [this, pool]
         mv.visitInsn(Opcodes.DUP_X1); // stack: [pool, this, pool]
         mv.visitFieldInsn(Opcodes.PUTFIELD, clzName, fldCpName, Type.getDescriptor(ConstantPool.class)); // [pool]
@@ -142,13 +141,12 @@ final class CodeGenerator {
         mv.visitEnd();
     }
 
-    static void handleField(ClassVisitor cv, String clzName, MetadataField field, Class<?> fldType, String fieldName, String methodName) {
+    static void handleField(ClassVisitor cv, String clzName, boolean isArray, Class<?> fldType, String fieldName, String methodName) {
         if (fldType == null) {
             // field is never accessed directly, can skip the rest
             return;
         }
 
-        boolean isArray = field.getDimension() > 0;
         String fldDescriptor = (isArray ? "[" : "") + Type.getDescriptor(fldType);
         cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, fieldName, fldDescriptor, null, null).visitEnd();
         MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, methodName, "()" + (isArray ? "[" : "") + Type.getDescriptor(fldType), null, null);
@@ -836,16 +834,21 @@ final class CodeGenerator {
                         appliedFields.add(field);
                     }
 
-                    Class<?> fldClz = clz.getContext().getClassTargetType(field.getType().getName());
+                    MetadataClass fldType = field.getType();
+                    while (fldType.isSimpleType()) {
+                        fldType = fldType.getFields().getFirst().getType();
+                    }
+
+                    Class<?> fldClz = clz.getContext().getClassTargetType(fldType.getName());
                     boolean withConstantPool = field.hasConstantPool();
                     String methodName = fieldToMethodMap.get(fieldName);
                     if (methodName == null) {
                         methodName = fieldName;
                     }
                     if (withConstantPool) {
-                        handleFieldRef(cw, clzName, field, fldClz, fieldName, methodName);
+                        handleFieldRef(cw, clzName, field.getType().getId(), field.getDimension() > 0, fldClz, fieldName, methodName);
                     } else {
-                        handleField(cw, clzName, field, fldClz, fieldName, methodName);
+                        handleField(cw, clzName, field.getDimension() > 0, fldClz, fieldName, methodName);
                     }
                     generatedMethods.add(methodName);
                 }
@@ -900,6 +903,10 @@ final class CodeGenerator {
         if (fld.getDimension() > 0) {
             instructions.add(TypeSkipper.Instruction.ARRAY);
         }
+        boolean withCp = fld.hasConstantPool();
+        while (fldClz.isSimpleType()) {
+            fldClz = fldClz.getFields().getFirst().getType();
+        }
         switch (fldClz.getName()) {
             case "byte", "boolean" ->
                     instructions.add(TypeSkipper.Instruction.BYTE);
@@ -909,11 +916,16 @@ final class CodeGenerator {
                     instructions.add(TypeSkipper.Instruction.FLOAT);
             case "double" ->
                     instructions.add(TypeSkipper.Instruction.DOUBLE);
-            case "java.lang.String" ->
+            case "java.lang.String" -> {
+                if (withCp) {
+                    instructions.add(TypeSkipper.Instruction.CP_ENTRY);
+                } else {
                     instructions.add(TypeSkipper.Instruction.STRING);
+                }
+            }
             default -> {
-                if (fld.hasConstantPool()) {
-                    instructions.add(TypeSkipper.Instruction.VARINT);
+                if (withCp) {
+                    instructions.add(TypeSkipper.Instruction.CP_ENTRY);
                 } else {
                     for (MetadataField subField : fldClz.getFields()) {
                         fillSkipper(subField, instructions);
