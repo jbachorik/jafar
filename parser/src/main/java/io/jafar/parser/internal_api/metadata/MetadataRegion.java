@@ -3,19 +3,34 @@ package io.jafar.parser.internal_api.metadata;
 import io.jafar.parser.internal_api.RecordingStream;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public final class MetadataRegion extends AbstractMetadataElement {
-    private final long dst;
-    private final long gmtOffset;
-    private final String locale;
+    private boolean hasHashCode = false;
+    private int hashCode;
 
-    MetadataRegion(RecordingStream stream, ElementReader reader) throws IOException {
+    private long dst;
+    private long gmtOffset;
+    private String locale;
+
+    MetadataRegion(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.REGION);
-        this.dst = Long.parseLong(getAttribute("dst", "0"));
-        this.gmtOffset = Long.parseLong(getAttribute("gmtOffset", "0"));
-        this.locale = getAttribute("locale", "en_US");
-        resetAttributes();
-        readSubelements(reader);
+        readSubelements(event);
+    }
+
+    @Override
+    protected void onAttribute(String key, String value) {
+        switch (key) {
+            case "dst":
+                dst = value != null ? Long.parseLong(value) : 0L;
+                break;
+            case "gmtOffset":
+                gmtOffset = value!= null ? Long.parseLong(value) : 0L;
+                break;
+            case "locale":
+                locale = value != null ? value : "en_US";
+                break;
+        }
     }
 
     public long getDst() {
@@ -31,7 +46,7 @@ public final class MetadataRegion extends AbstractMetadataElement {
     }
 
     @Override
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         throw new IllegalStateException("Unexpected subelement: " + element.getKind());
     }
 
@@ -48,5 +63,23 @@ public final class MetadataRegion extends AbstractMetadataElement {
                 ", gmtOffset=" + gmtOffset +
                 ", locale='" + locale + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MetadataRegion that = (MetadataRegion) o;
+        return dst == that.dst && gmtOffset == that.gmtOffset && Objects.equals(locale, that.locale);
+    }
+
+    @Override
+    public int hashCode() {
+        if (!hasHashCode) {
+            long mixed = dst * 0x9E3779B97F4A7C15L + gmtOffset * 0xC6BC279692B5C323L + Objects.hashCode(locale) * 0xD8163841FDE6A8F9L;
+            hashCode = Long.hashCode(mixed);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }

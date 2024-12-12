@@ -7,45 +7,75 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class MetadataField extends AbstractMetadataElement {
-    private final List<MetadataAnnotation> annotations = new ArrayList<>();
-    private final long classId;
-    private final boolean hasConstantPool;
-    private final int dimension;
+    private boolean hasHashCode = false;
+    private int hashCode;
+
+    private List<MetadataAnnotation> annotations = null;
+    private Long classId;
+    private String classIdVal;
+    private Boolean hasConstantPool;
+    private String hasConstantPoolVal;
+    private Integer dimension;
+    private String dimensionVal;
+
     private MetadataClass type = null;
 
-    MetadataField(RecordingStream stream, ElementReader reader, boolean forceConstantPools) throws IOException {
+    MetadataField(RecordingStream stream, MetadataEvent event, boolean forceConstantPools) throws IOException {
         super(stream, MetadataElementKind.FIELD);
-        classId = Long.parseLong(getAttribute("class"));
-        hasConstantPool = forceConstantPools || Boolean.parseBoolean(getAttribute("constantPool"));
-        dimension = Integer.parseInt(getAttribute("dimension", "-1"));
-        resetAttributes();
-        readSubelements(reader);
+        readSubelements(event);
+    }
+
+    @Override
+    protected void onAttribute(String key, String value) {
+        switch (key) {
+            case "class":
+                classIdVal = value;
+                break;
+            case "constantPool":
+                hasConstantPoolVal = value;
+                break;
+            case "dimension":
+                dimensionVal = value;
+                break;
+        }
     }
 
     public MetadataClass getType() {
         // all events from a single chunk, referencing a particular type will be procesed in a single thread
         // therefore, we are not risiking data race here
         if (type == null) {
-            type = metadataLookup.getClass(classId);
+            type = metadataLookup.getClass(getTypeId());
         }
         return type;
     }
 
     public long getTypeId() {
+        if (classId == null) {
+            classId = Long.parseLong(classIdVal);
+        }
         return classId;
     }
 
     public boolean hasConstantPool() {
+        if (hasConstantPool == null) {
+            hasConstantPool = Boolean.parseBoolean(hasConstantPoolVal);
+        }
         return hasConstantPool;
     }
 
     public int getDimension() {
+        if (dimension == null) {
+            dimension = dimensionVal != null ? Integer.parseInt(dimensionVal) : -1;
+        }
         return dimension;
     }
 
     @Override
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.ANNOTATION) {
+            if (annotations == null) {
+                annotations = new ArrayList<>(count);
+            }
             annotations.add((MetadataAnnotation) element);
         } else {
             throw new IllegalStateException("Unexpected subelement: " + element.getKind());
@@ -55,17 +85,37 @@ public final class MetadataField extends AbstractMetadataElement {
     @Override
     public void accept(MetadataVisitor visitor) {
         visitor.visitField(this);
-        annotations.forEach(a -> a.accept(visitor));
+        if (annotations != null) {
+            annotations.forEach(a -> a.accept(visitor));
+        }
         visitor.visitEnd(this);
     }
 
     @Override
     public String toString() {
         return "MetadataField{" +
-                "type='" + (getType() != null ? getType().getName() : classId) + '\'' +
+                "type='" + (getType() != null ? getType().getName() : getTypeId()) + '\'' +
                 ", name='" + getName() + "'" +
                 ", hasConstantPool=" + hasConstantPool +
                 ", dimension=" + dimension +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MetadataField that = (MetadataField) o;
+        return getTypeId() == that.getTypeId() && hasConstantPool() == that.hasConstantPool() && getDimension() == that.getDimension();
+    }
+
+    @Override
+    public int hashCode() {
+        if (!hasHashCode) {
+            long mixed = getTypeId() * 0x9E3779B97F4A7C15L + (hasConstantPool() ? 1 : 0) * 0xC6BC279692B5C323L + getDimension() * 0xD8163841FDE6A8F9L;
+            hashCode = Long.hashCode(mixed);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }

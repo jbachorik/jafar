@@ -5,19 +5,25 @@ import io.jafar.parser.internal_api.RecordingStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public final class MetadataElement extends AbstractMetadataElement {
-    private final List<MetadataClass> classes = new ArrayList<>();
+    private boolean hasHashCode = false;
+    private int hashCode;
 
-    MetadataElement(RecordingStream stream, ElementReader reader) throws IOException {
+    private List<MetadataClass> classes = null;
+
+    MetadataElement(RecordingStream stream, MetadataEvent event) throws IOException {
         super(stream, MetadataElementKind.META);
-        resetAttributes();
-        readSubelements(reader);
+        readSubelements(event);
     }
 
     @Override
-    protected void onSubelement(AbstractMetadataElement element) {
+    protected void onSubelement(int count, AbstractMetadataElement element) {
         if (element.getKind() == MetadataElementKind.CLASS) {
+            if (classes == null) {
+                classes = new ArrayList<>(count);
+            }
             MetadataClass clz = (MetadataClass) element;
             classes.add(clz);
         } else {
@@ -28,11 +34,30 @@ public final class MetadataElement extends AbstractMetadataElement {
     @Override
     public void accept(MetadataVisitor visitor) {
         visitor.visitMetadata(this);
-        classes.forEach(c -> c.accept(visitor));
+        if (classes != null) {
+            classes.forEach(c -> c.accept(visitor));
+        }
     }
 
     @Override
     public String toString() {
         return "MetadataElement";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MetadataElement that = (MetadataElement) o;
+        return Objects.equals(classes, that.classes);
+    }
+
+    @Override
+    public int hashCode() {
+        if (!hasHashCode) {
+            hashCode = Objects.hash(classes);
+            hasHashCode = true;
+        }
+        return hashCode;
     }
 }
