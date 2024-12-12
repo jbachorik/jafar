@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
+HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 if [ ! -f demo/src/test/resources/test-ap.jfr ]; then
-  wget --no-check-certificate -O demo/src/test/resources/test-ap.jfr "https://drive.usercontent.google.com/download?id=1lebqWl27wAF1Q59cziTvVcz3osVx6iSn&export=download&authuser=0&confirm=t&uuid=c1f0f74f-4905-440a-acf0-bd90c628d6db&at=AN_67v2uViTVsyMesAoxPq7yUFr4%3A1728386424683"
-fi
-if [ ! -f demo/src/test/resources/test-async.jfr ]; then
-  wget --no-check-certificate -O demo/src/test/resources/test-async.jfr "https://drive.usercontent.google.com/download?id=13eC3Rcapd9mWqZ_FmTDMsEe_naNshtmn&export=download&authuser=0&confirm=t&uuid=93d70a93-aba0-485f-a981-242866014e12&at=AN_67v3ONmsOLbP3EsuhrLRZgiig%3A1728386466678"
+  wget --no-check-certificate -O demo/src/test/resources/test-ap.jfr "https://www.dropbox.com/scl/fi/lp5bj8adi3l7jge9ykayr/test-ap.jfr?rlkey=28wghlmp7ge4bxnan9ccwarby&st=0kd2p1u1&dl=0"
 fi
 if [ ! -f demo/src/test/resources/test-jfr.jfr ]; then
-  wget --no-check-certificate -O demo/src/test/resources/test-jfr.jfr "https://drive.usercontent.google.com/download?id=1UqqpUQwVSyIYMEGP4uEr_pA-A-Gmbpo9&export=download&authuser=0&confirm=t&uuid=25b88cbd-7493-47db-b9db-a223d62a66c2&at=AN_67v0u2i7M4LFf3jmjZqlI6vZU%3A1728386510351"
+  wget --no-check-certificate -O demo/src/test/resources/test-jfr.jfr "https://www.dropbox.com/scl/fi/5uhp13h9ltj38joyqmwo5/test-jfr.jfr?rlkey=p0wmznxgm7zud6xzaydled69c&st=ilfirsrg&dl=0"
 fi
 
-ln -s demo/src/test/resources/test-ap.jfr parser/src/test/resources/test-ap.jfr
+if [ ! -f parser/src/test/resource/test-ap.jfr ]; then
+  ln -s ${HERE}/demo/src/test/resources/test-ap.jfr ${HERE}/parser/src/test/resources/test-ap.jfr
+fi

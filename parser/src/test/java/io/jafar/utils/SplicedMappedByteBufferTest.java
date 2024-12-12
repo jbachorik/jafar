@@ -29,7 +29,7 @@ public class SplicedMappedByteBufferTest {
         mapFile = Files.createTempFile("jafar-", ".tmp");
         mapFile.toFile().deleteOnExit();
         byte[] data = new byte[FILE_SIZE];
-        ByteBuffer bb = MappedByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer bb = MappedByteBuffer.wrap(data).order(ByteOrder.nativeOrder());
         bb.put((byte)1);
         bb.putShort((short)2);
         bb.putInt((int)3);
