@@ -25,7 +25,7 @@ dependencies {
     implementation gradleApi() // Provides the Gradle API, including Plugin
     implementation localGroovy()
 
-    implementation project(':parser')
+    implementation 'io.btrace:jafar-parser:0.0.1-SNAPSHOT'
     implementation 'org.jctools:jctools-core:4.0.1'
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.5'
     implementation 'org.openjdk.jmc:flightrecorder:8.3.1'
@@ -67,24 +67,3 @@ publishing {
     }
 }
 
-//publishing {
-//    publications {
-//        pluginMaven(MavenPublication) { publication ->
-//            publication.groupId = 'io.btrace'
-//            publication.artifactId = 'jafar-gradle-plugin'
-//            publication.version = component_version
-//
-//            publication.artifact jar
-//            publication.artifact sourcesJar
-//            publication.artifact javadocJar
-//        }
-//    }
-//}
-
-//publishing {
-//    publications {
-//        pluginMaven(MavenPublication) {
-//            from gradlePlugin
-//        }
-//    }
-//}
