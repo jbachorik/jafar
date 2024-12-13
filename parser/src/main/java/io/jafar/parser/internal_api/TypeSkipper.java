@@ -5,46 +5,55 @@ import io.jafar.parser.ParsingUtils;
 import java.io.IOException;
 
 public final class TypeSkipper {
-    public enum Instruction {
-        ARRAY, ARRAY_END, BYTE, VARINT, FLOAT, DOUBLE, STRING, CP_ENTRY;
+    public static final class Instructions {
+        public static final int ARRAY = 1;
+        public static final int BYTE = 2;
+        public static final int FLOAT = 3;
+        public static final int DOUBLE = 4;
+        public static final int STRING = 5;
+        public static final int VARINT = 6;
+        public static final int CP_ENTRY = 7;
     }
 
-    private final Instruction[] instructions;
+    private final int[] instructions;
 
-    public TypeSkipper(Instruction[] instructions) {
+    public TypeSkipper(int[] instructions) {
         this.instructions = instructions;
     }
 
     public void skip(RecordingStream stream) throws IOException {
         for (int i = 0; i < instructions.length; i++) {
-            Instruction instruction = instructions[i];
-            if (instruction == Instruction.ARRAY) {
+            int instruction = instructions[i];
+            if (instruction == Instructions.ARRAY) {
+                int endIndex = (++i) + instructions[i++]; // next instruction for array is encoding the number of instructions per array item
                 int cnt = (int)stream.readVarint();
-                int savedIndex = ++i;
-                int lastIndex = -1;
-                for (int j = 0; j < cnt; j++) {
-                    while ((instruction = instructions[i]) != Instruction.ARRAY_END) {
-                        skip(instruction, stream);
-                        i++;
-                    }
-                    lastIndex = i;
-                    i = savedIndex;
+                if (cnt == 0) {
+                    i = endIndex;
+                    continue;
                 }
-                i = lastIndex;
+                int savedIndex = i;
+                for (int j = 0; j < cnt; ) {
+                    skip(instructions[i], stream);
+                    if (endIndex == i++) {
+                        i = savedIndex;
+                        j++;
+                    }
+                }
+                i = endIndex;
                 continue;
             }
             skip(instruction, stream);
         }
     }
 
-    private static void skip(Instruction instruction, RecordingStream stream) throws IOException {
+    private static void skip(int instruction, RecordingStream stream) throws IOException {
         switch (instruction) {
-            case VARINT:
-            case CP_ENTRY: stream.readVarint(); break;
-            case BYTE: stream.skip(1); break;
-            case FLOAT: stream.skip(4); break;
-            case DOUBLE: stream.skip(8); break;
-            case STRING: ParsingUtils.skipUTF8(stream); break;
+            case Instructions.VARINT:
+            case Instructions.CP_ENTRY: stream.readVarint(); break;
+            case Instructions.BYTE: stream.skip(1); break;
+            case Instructions.FLOAT: stream.skip(4); break;
+            case Instructions.DOUBLE: stream.skip(8); break;
+            case Instructions.STRING: ParsingUtils.skipUTF8(stream); break;
         }
     }
 }
