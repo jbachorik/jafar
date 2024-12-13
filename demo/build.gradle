@@ -33,10 +33,17 @@ tasks.build {
 dependencies {
     implementation project(':parser')
     implementation 'org.jctools:jctools-core:4.0.1'
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.5'
     implementation 'org.openjdk.jmc:flightrecorder:8.3.1'
 }
 
 test {
     useJUnitPlatform()
+}
+
+generateJafarTypes {
+    overwrite = false
+    eventTypeFilter {
+        it == 'jdk.ExecutionSample'
+    }
+    targetPackage = 'io.jafar.demo.types'
 }

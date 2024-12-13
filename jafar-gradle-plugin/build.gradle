@@ -2,10 +2,11 @@ plugins {
     id 'java-gradle-plugin'
     id 'groovy'
     id 'maven-publish'
+    id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
 }
 
 group = "io.btrace"
-version = project.hasProperty("jafar_version") ? project.jafar_version : rootProject.version
+version = "0.0.1-SNAPSHOT"
 
 repositories {
     mavenLocal()
@@ -63,6 +64,15 @@ publishing {
     publications {
         pluginMaven(MavenPublication) {
             artifactId = "jafar-gradle-plugin" // Set your custom artifact ID
+        }
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            username = project.hasProperty("sonatype.user") ? project.property("sonatype.user") : System.getenv("SONATYPE_USERNAME")
+            password = project.hasProperty("sonatype.password") ? project.property("sonatype.password") : System.getenv("SONATYPE_PASSWORD")
         }
     }
 }
