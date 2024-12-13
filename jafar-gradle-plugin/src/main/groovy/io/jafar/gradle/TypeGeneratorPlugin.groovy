@@ -4,11 +4,14 @@ import io.jafar.utils.TypeGenerator
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
+import org.gradle.api.file.DirectoryProperty
+
+import java.util.function.Predicate
 
 class TypeGeneratorPlugin implements Plugin<Project> {
     @Override
     void apply(Project project) {
-        def extension = project.extensions.create('generateSources', GenerateSourcesExtension, project)
+        def extension = project.extensions.create('generateJafarTypes', GenerateJafarTypesExtension, project)
 
         project.afterEvaluate {
             if (project.hasProperty('jafar.input')) {
@@ -26,7 +29,7 @@ class TypeGeneratorPlugin implements Plugin<Project> {
 
             // Define inputs and outputs for task up-to-date checks
             inputs.file(extension.inputFile).optional(true)
-            outputs.dir(generatedSourcesDir)
+            outputs.dir(extension.outputDir.orElse(project.layout.buildDirectory.dir("generated/sources/jafar/src/main")))
 
             doLast {
                 if (!extension.inputFile.isPresent()) {
@@ -36,13 +39,22 @@ class TypeGeneratorPlugin implements Plugin<Project> {
                 }
 
                 def input = extension.inputFile.isPresent() ? extension.inputFile.get() : null
-                def output = generatedSourcesDir
+                def output = extension.outputDir.orElse(project.layout.buildDirectory.dir("generated/sources/jafar/src/main")).get().asFile
+                def overwrite = extension.overwrite.getOrElse(false)
+                def targetPackage = extension.targetPackage.getOrElse("io.jafar.parser.api.types")
+
 
                 // Ensure output directory exists
                 output.mkdirs()
 
+                Predicate<String> predicate = null
+                if (extension.eventTypeFilter.isPresent()) {
+                    def filterClosure = extension.eventTypeFilter.get()
+                    predicate = filterClosure as Predicate<String> // Convert Closure to Predicate
+                }
+
                 // Instantiate and execute TypeGenerator
-                def generator = new TypeGenerator(input?.toPath(), output.toPath())
+                def generator = new TypeGenerator(input?.toPath(), output.toPath(), targetPackage, overwrite, predicate)
                 generator.generate()
             }
         }
@@ -57,11 +69,23 @@ class TypeGeneratorPlugin implements Plugin<Project> {
     }
 
     // Extension to configure the input file
-    static class GenerateSourcesExtension {
+    static class GenerateJafarTypesExtension {
         final Property<File> inputFile
+        final DirectoryProperty outputDir
+        final Property<String> targetPackage
+        final Property<Boolean> overwrite
+        final Property<Closure<Boolean>> eventTypeFilter
 
-        GenerateSourcesExtension(Project project) {
+        GenerateJafarTypesExtension(Project project) {
             inputFile = project.objects.property(File)
+            outputDir = project.objects.directoryProperty()
+            targetPackage = project.objects.property(String)
+            overwrite = project.objects.property(Boolean)
+            eventTypeFilter = project.objects.property(Closure)
+        }
+
+        void eventTypeFilter(Closure<Boolean> eventTypeFilterClosure) {
+            this.eventTypeFilter.set(eventTypeFilterClosure)
         }
     }
 }

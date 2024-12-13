@@ -24,3 +24,5 @@ jobs:
       - name: Publish
         run: |
           ./gradlew publish
+          cd jafar-gradle-plugin
+          ./gradlew publish

@@ -12,20 +12,27 @@ import jdk.jfr.ValueDescriptor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 
 public final class TypeGenerator {
     private final Path jfr;
     private final Path output;
+    private final String pkg;
+    private final boolean overwrite;
+    private final Predicate<String> eventTypeFilter;
 
-    public TypeGenerator(Path jfr, Path output) throws IOException{
+    public TypeGenerator(Path jfr, Path output, String targetPackage, boolean overwrite, Predicate<String> eventTypeFilter) throws IOException{
         if (!Files.isDirectory(output) || !Files.exists(output)) {
             throw new IllegalArgumentException("Output directory does not exist: " + output);
         }
         this.jfr = jfr;
-        this.output = output.resolve("io/jafar/parser/api/types");
+        this.pkg = targetPackage;
+        this.output = output.resolve(targetPackage.replace('.', '/'));
+        this.overwrite = overwrite;
+        this.eventTypeFilter = eventTypeFilter;
         Files.createDirectories(this.output);
     }
 
@@ -40,21 +47,27 @@ public final class TypeGenerator {
     private void generateFromRuntime() throws Exception {
         Set<String> generated = new HashSet<>();
         FlightRecorder.getFlightRecorder().getEventTypes().forEach(et -> {
-            try {
-                Files.writeString(output.resolve("JFR" + getSimpleName(et.getName()) + ".java"), generateTypeFromEvent(et, generated));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            if (eventTypeFilter == null || eventTypeFilter.test(et.getName())) {
+                try {
+                    Path target = output.resolve("JFR" + getSimpleName(et.getName()) + ".java");
+                    if (overwrite || !Files.exists(target)) {
+                        Files.writeString(target, generateTypeFromEvent(et, generated), StandardOpenOption.CREATE_NEW);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+
+                }
             }
         });
     }
 
     private String generateTypeFromEvent(EventType et, Set<String> generatedTypes) {
         StringBuilder sb = new StringBuilder();
-        sb.append("package io.jafar.parser.api.types;\n");
+        sb.append("package ").append(pkg).append(";\n");
         sb.append("\n");
         sb.append("import io.jafar.parser.api.*;\n");
-        sb.append("@JfrType(\"").append(et.getName()).append("\")\n");
-        sb.append("public interface JFR").append(getSimpleName(et.getName())).append(" extends JFREvent").append(" {\n");
+        sb.append("@JfrType(\"").append(et.getName()).append("\")\n\n");
+        sb.append("public interface JFR").append(getSimpleName(et.getName())).append(" {\n");
         et.getFields().forEach(field -> {
             try {
                 writeTypeFromField(field, generatedTypes);
@@ -83,7 +96,10 @@ public final class TypeGenerator {
         if (data != null) {
             String typeName = f.getTypeName();
             String targetName = isPrimitiveName(typeName) ? typeName : "JFR" + getSimpleName(typeName);
-            Files.writeString(output.resolve(targetName + ".java"), data);
+            Path target = output.resolve(targetName + ".java");
+            if (overwrite || !Files.exists(target)) {
+                Files.writeString(output.resolve(targetName + ".java"), data, StandardOpenOption.CREATE_NEW);
+            }
         }
     }
 
@@ -95,10 +111,10 @@ public final class TypeGenerator {
 
         if (generatedTypes.add(typeName)) {
             StringBuilder sb = new StringBuilder();
-            sb.append("package io.jafar.parser.api.types;\n");
+            sb.append("package ").append(pkg).append(";\n");
             sb.append("\n");
             sb.append("import io.jafar.parser.api.*;\n");
-            sb.append("@JfrType(\"").append(typeName).append("\")\n");
+            sb.append("@JfrType(\"").append(typeName).append("\")\n\n");
             sb.append("public interface JFR").append(getSimpleName(typeName)).append(" {\n");
             field.getFields().forEach(subfield -> {
                 try {
@@ -146,7 +162,9 @@ public final class TypeGenerator {
         }
         try {
             Path classFile = output.resolve(getClassName(metadataClass) + ".java");
-            Files.writeString(classFile, generateClass(metadataClass));
+            if (overwrite || !Files.exists(classFile)) {
+                Files.writeString(classFile, generateClass(metadataClass), StandardOpenOption.CREATE_NEW);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -154,14 +172,11 @@ public final class TypeGenerator {
 
     private String generateClass(MetadataClass clazz) {
         StringBuilder sb  = new StringBuilder();
-        sb.append("package io.jafar.parser.api.types;\n");
+        sb.append("package ").append(pkg).append(";\n");
         sb.append("\n");
         sb.append("import io.jafar.parser.api.*;\n");
-        sb.append("@JfrType(\"").append(clazz.getName()).append("\")\n");
+        sb.append("@JfrType(\"").append(clazz.getName()).append("\")\n\n");
         sb.append("public interface ").append(getClassName(clazz));
-        if (isEvent(clazz)) {
-            sb.append(" extends JFREvent");
-        }
         sb.append(" {\n");
         for (MetadataField field : clazz.getFields()) {
             String fldName = sanitizeFieldName(field.getName());

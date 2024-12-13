@@ -1,5 +1,6 @@
 package io.jafar.demo;
 
+import io.jafar.demo.types.JFRExecutionSample;
 import io.jafar.parser.api.HandlerRegistration;
 import io.jafar.parser.api.JafarParser;
 import jdk.jfr.consumer.EventStream;
@@ -61,7 +62,7 @@ public class Main {
 
     private static void runWithJafar(File file, LongAccumulator sum, AtomicInteger cnt) throws Exception {
         try (JafarParser p = JafarParser.open(file.getPath())) {
-            HandlerRegistration<ExecutionSampleEvent> h1 = p.handle(ExecutionSampleEvent.class, (event, ctl) -> {
+            HandlerRegistration<JFRExecutionSample> h1 = p.handle(JFRExecutionSample.class, (event, ctl) -> {
                 if (event.sampledThread() == null) {
                     throw new RuntimeException();
                 }

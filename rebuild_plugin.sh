@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
+set -e
+
 ./gradlew :parser:publishToMavenLocal
 
 (
-  cd gradle-plugin || exit
-  ./gradlew publishToMavenLocal
+  cd jafar-gradle-plugin || exit
+  ./gradlew clean publishToMavenLocal
 )
