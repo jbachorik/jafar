@@ -5,6 +5,8 @@ import io.jafar.parser.api.JfrField;
 import io.jafar.parser.api.JfrIgnore;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import io.jafar.parser.internal_api.metadata.MetadataField;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -891,17 +893,21 @@ final class CodeGenerator {
     }
 
     private static TypeSkipper createSkipper(MetadataClass clz) {
-        List<TypeSkipper.Instruction> instructions = new ArrayList<>(100);
+        IntList instructions = new IntArrayList(20);
         for (MetadataField fld : clz.getFields()) {
             fillSkipper(fld, instructions);
         }
-        return new TypeSkipper(instructions.toArray(new TypeSkipper.Instruction[0]));
+        return new TypeSkipper(instructions.toIntArray());
     }
 
-    private static void fillSkipper(MetadataField fld, List<TypeSkipper.Instruction> instructions) {
+    private static void fillSkipper(MetadataField fld, IntList instructions) {
+        int startingSize = instructions.size();
+        int arraySizeIdx = -1;
         MetadataClass fldClz = fld.getType();
         if (fld.getDimension() > 0) {
-            instructions.add(TypeSkipper.Instruction.ARRAY);
+            instructions.add(TypeSkipper.Instructions.ARRAY);
+            arraySizeIdx = instructions.size();
+            instructions.add(0); // reserve slot for the array size
         }
         boolean withCp = fld.hasConstantPool();
         while (fldClz.isSimpleType()) {
@@ -909,23 +915,23 @@ final class CodeGenerator {
         }
         switch (fldClz.getName()) {
             case "byte", "boolean" ->
-                    instructions.add(TypeSkipper.Instruction.BYTE);
+                    instructions.add(TypeSkipper.Instructions.BYTE);
             case "char", "short", "int", "long" ->
-                    instructions.add(TypeSkipper.Instruction.VARINT);
+                    instructions.add(TypeSkipper.Instructions.VARINT);
             case "float" ->
-                    instructions.add(TypeSkipper.Instruction.FLOAT);
+                    instructions.add(TypeSkipper.Instructions.FLOAT);
             case "double" ->
-                    instructions.add(TypeSkipper.Instruction.DOUBLE);
+                    instructions.add(TypeSkipper.Instructions.DOUBLE);
             case "java.lang.String" -> {
                 if (withCp) {
-                    instructions.add(TypeSkipper.Instruction.CP_ENTRY);
+                    instructions.add(TypeSkipper.Instructions.CP_ENTRY);
                 } else {
-                    instructions.add(TypeSkipper.Instruction.STRING);
+                    instructions.add(TypeSkipper.Instructions.STRING);
                 }
             }
             default -> {
                 if (withCp) {
-                    instructions.add(TypeSkipper.Instruction.CP_ENTRY);
+                    instructions.add(TypeSkipper.Instructions.CP_ENTRY);
                 } else {
                     for (MetadataField subField : fldClz.getFields()) {
                         fillSkipper(subField, instructions);
@@ -934,7 +940,7 @@ final class CodeGenerator {
             }
         }
         if (fld.getDimension() > 0) {
-            instructions.add(TypeSkipper.Instruction.ARRAY_END);
+            instructions.set(arraySizeIdx, instructions.size() - startingSize - 2);
         }
     }
 
