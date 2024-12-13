@@ -66,3 +66,35 @@ try (JafarParser parser = JafarParser.open("path_to_jfr.jfr")) {}
 This short program will parse the recording and call the `handle` method for each `custom.MyEvent` event.
 The number of handlers per type is not limited, they all will be executed sequentially.
 With the handlers known beforehand, the parser can safely skip all unreachable events and types, massively saving on the parsing time.
+
+### Generate Jafar Type Interfaces during the build
+There is an in-progress Gradle plugin for generating the Jafar type interfaces based on either the JVM runtime JFR metadata
+or the metadata extracted from a JFR file.
+
+```gradle
+plugins {
+    id 'io.btrace.jafar-gradle-plugin' version '0.0.1-SNAPSHOT'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    // use sonatype snapshots - that's where the plugin artifact lives for now
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+}
+
+// This will be called implicitly before project compilation.
+// Can also be invoked by hand to bootstrap the development
+generateJafarTypes {
+    inputFile = file('/tmp/my.jfr') // extract the metadata from this JFR file; otherwise use the JVM runtime metadata
+    outputDir = project.file('src/main/java') // generate the files under this particular source directory; if not specified 'buld/generated/sources/jafar/src/main' will be used
+    overwrite = false // specify whether to overwrite the existing files 
+    eventTypeFilter { // process only certain event types (and transitive closure of types they depend on)
+        it == 'jdk.ExecutionSample'
+    }
+    targetPackage = 'io.jafar.demo.types' // generate the types in this package
+    
+}
+```
