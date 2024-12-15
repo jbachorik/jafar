@@ -210,7 +210,7 @@ public final class TypeGenerator {
         }
     }
 
-    private static boolean isEvent(MetadataClass clazz) {
+    public static boolean isEvent(MetadataClass clazz) {
         String superType = clazz.getSuperType();
         if (superType == null) {
             return false;

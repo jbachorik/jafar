@@ -6,8 +6,10 @@ import io.jafar.parser.TypeFilter;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import io.jafar.utils.CachedStringParser;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +27,8 @@ public final class ParserContext {
     private final ConcurrentMap<String, WeakReference<?>> bag = new ConcurrentHashMap<>();
 
     private Long2ObjectMap<Class<?>> classTypeMap = null;
+
+    private final Map<Class<?>, Object> eventInstanceCache = new HashMap<>(32);
 
     public static class DeserializerKey {
         private final long id;
@@ -143,5 +147,9 @@ public final class ParserContext {
 
     public ConcurrentMap<DeserializerKey, Deserializer<?>> getDeserializerCache() {
         return globalDeserializerCache;
+    }
+
+    public Map<Class<?>, Object> getEventInstanceCache() {
+        return eventInstanceCache;
     }
 }

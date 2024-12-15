@@ -77,10 +77,15 @@ public abstract class Deserializer<T> {
     public static final class Generated<T> extends Deserializer<T> {
         private final MethodHandle skipHandler;
         private final MethodHandle deserializeHandler;
+        private final MethodHandle refreshHandler;
         private final TypeSkipper typeSkipper;
 
-        public Generated(MethodHandle deserializeHandler, MethodHandle skipHandler, TypeSkipper skipper) {
+        private final Class<T> clazz;
+
+        public Generated(Class<T> clazz, MethodHandle deserializeHandler, MethodHandle refreshHandle, MethodHandle skipHandler, TypeSkipper skipper) {
+            this.clazz = clazz;
             this.deserializeHandler = deserializeHandler;
+            this.refreshHandler = refreshHandle;
             this.skipHandler = skipHandler;
             this.typeSkipper = skipper;
         }
@@ -104,13 +109,23 @@ public abstract class Deserializer<T> {
         @Override
         public T deserialize(RecordingStream stream) throws Exception {
             try {
+                Map<Class<?>, Object> cache = stream.getContext().getEventInstanceCache();
+                T cachedInstance = (T)cache.get(clazz);
+                if (cachedInstance != null) {
+                    refreshHandler.invoke(cachedInstance, stream);
+                    return cachedInstance;
+                }
                 if (deserializeHandler == null) {
                     // no deserialize method, skip
                     skip(stream);
                     // no value to return
                     return null;
                 }
-                return (T)deserializeHandler.invoke(stream);
+                T value = (T)deserializeHandler.invoke(stream);
+                if (refreshHandler != null) {
+                    cache.put(clazz, value);
+                }
+                return value;
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }

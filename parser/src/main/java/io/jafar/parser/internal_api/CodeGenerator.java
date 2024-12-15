@@ -5,8 +5,10 @@ import io.jafar.parser.api.JfrField;
 import io.jafar.parser.api.JfrIgnore;
 import io.jafar.parser.internal_api.metadata.MetadataClass;
 import io.jafar.parser.internal_api.metadata.MetadataField;
+import io.jafar.utils.TypeGenerator;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import jdk.dynalink.linker.support.TypeUtilities;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -68,37 +70,33 @@ final class CodeGenerator {
         }
         clzName = clzName.replace('.', '/');
         String fldRefName = fldName + "_ref";
+        String fldValName = fldName + "_val";
         String fldCpName = fldName + "_cp";
         String mthdCpName = fldCpName + "$get";
 
-        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, fldRefName, (isArray ? "[" : "") + "J", null, null).visitEnd();
+        String fldValDesc = (isArray ? "[" : "") + Type.getDescriptor(fldType);
+
+        cv.visitField(Opcodes.ACC_PRIVATE, fldRefName, (isArray ? "[" : "") + "J", null, null).visitEnd();
+        cv.visitField(Opcodes.ACC_PRIVATE, fldValName, fldValDesc, null, null).visitEnd();
         cv.visitField(Opcodes.ACC_PRIVATE, fldCpName, Type.getDescriptor(ConstantPool.class), null, null).visitEnd();
 
-        MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PRIVATE, mthdCpName, Type.getMethodDescriptor(Type.getType(ConstantPool.class)), null, null);
-        mv.visitCode();
-        Label l = new Label();
-        mv.visitVarInsn(Opcodes.ALOAD, 0); // stack: [this]
-        mv.visitFieldInsn(Opcodes.GETFIELD, clzName, fldCpName, Type.getDescriptor(ConstantPool.class)); // stack: [pool]
-        mv.visitInsn(Opcodes.DUP); // stack: [pool, pool]
-        mv.visitJumpInsn(Opcodes.IFNONNULL, l); // stack: [pool]
-        mv.visitInsn(Opcodes.POP); // stack: []
-        mv.visitVarInsn(Opcodes.ALOAD, 0); // stack: [this]
-        mv.visitInsn(Opcodes.DUP); // stack: [this, this]
-        mv.visitFieldInsn(Opcodes.GETFIELD, clzName, "context", Type.getDescriptor(ParserContext.class)); // stack: [this, context]
-        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(ParserContext.class), "getConstantPools", Type.getMethodDescriptor(Type.getType(ConstantPools.class)), false); // stack: [this, pools]
-        mv.visitLdcInsn(typeId); // stack: [this, pools, type]
-        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(ConstantPools.class), "getConstantPool", Type.getMethodDescriptor(Type.getType(ConstantPool.class), Type.LONG_TYPE), true); // stack: [this, pool]
-        mv.visitInsn(Opcodes.DUP_X1); // stack: [pool, this, pool]
-        mv.visitFieldInsn(Opcodes.PUTFIELD, clzName, fldCpName, Type.getDescriptor(ConstantPool.class)); // [pool]
-        mv.visitInsn(Opcodes.ARETURN);
-        mv.visitLabel(l); // stack: [pool]
-        mv.visitInsn(Opcodes.ARETURN);
-        mv.visitMaxs(3, 2);
-        mv.visitEnd();
+        generateConstantPoolAccessMethod(cv, clzName, typeId, mthdCpName, fldCpName);
+        generteRefFieldGetterMethod(cv, clzName, isArray, fldType, methodName, fldValDesc, fldValName, mthdCpName, fldRefName);
+    }
 
-        mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, methodName, "()" + (isArray ? "[" : "") + Type.getDescriptor(fldType), null, null);
+    private static void generteRefFieldGetterMethod(ClassVisitor cv, String clzName, boolean isArray, Class<?> fldType, String methodName, String fldValDesc, String fldValName, String mthdCpName, String fldRefName) {
+        MethodVisitor mv;
+        mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, methodName, "()" + fldValDesc, null, null);
         mv.visitCode();
-        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
+        mv.visitFieldInsn(Opcodes.GETFIELD, clzName, fldValName, fldValDesc); // [fldVal]
+        mv.visitInsn(Opcodes.DUP); // [fldVal, fldVal]
+        Label l6 = new Label();
+        mv.visitJumpInsn(Opcodes.IFNULL, l6); // [fldVal]
+        mv.visitInsn(Opcodes.ARETURN); // []
+        mv.visitLabel(l6); // [fldVal]
+        mv.visitInsn(Opcodes.POP); // []
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, clzName, mthdCpName, Type.getMethodDescriptor(Type.getType(ConstantPool.class)), false);
         mv.visitInsn(Opcodes.DUP);
         mv.visitVarInsn(Opcodes.ASTORE, 1);
@@ -138,8 +136,36 @@ final class CodeGenerator {
             mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(ConstantPool.class), "get", Type.getMethodDescriptor(Type.getType(Object.class), Type.LONG_TYPE), true);
             mv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(fldType));
         }
-        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitInsn(Opcodes.DUP); // [fldVal, fldVal]
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // [fldVal, fldVal, this]
+        mv.visitInsn(Opcodes.SWAP); // [fldVal, this, fldVal]
+        mv.visitFieldInsn(Opcodes.PUTFIELD, clzName, fldValName, fldValDesc); // [fldVal]
+        mv.visitInsn(Opcodes.ARETURN); // []
         mv.visitMaxs(0, 0);
+        mv.visitEnd();
+    }
+
+    private static void generateConstantPoolAccessMethod(ClassVisitor cv, String clzName, long typeId, String mthdCpName, String fldCpName) {
+        MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PRIVATE, mthdCpName, Type.getMethodDescriptor(Type.getType(ConstantPool.class)), null, null);
+        mv.visitCode();
+        Label l = new Label();
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // stack: [this]
+        mv.visitFieldInsn(Opcodes.GETFIELD, clzName, fldCpName, Type.getDescriptor(ConstantPool.class)); // stack: [pool]
+        mv.visitInsn(Opcodes.DUP); // stack: [pool, pool]
+        mv.visitJumpInsn(Opcodes.IFNONNULL, l); // stack: [pool]
+        mv.visitInsn(Opcodes.POP); // stack: []
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // stack: [this]
+        mv.visitInsn(Opcodes.DUP); // stack: [this, this]
+        mv.visitFieldInsn(Opcodes.GETFIELD, clzName, "context", Type.getDescriptor(ParserContext.class)); // stack: [this, context]
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(ParserContext.class), "getConstantPools", Type.getMethodDescriptor(Type.getType(ConstantPools.class)), false); // stack: [this, pools]
+        mv.visitLdcInsn(typeId); // stack: [this, pools, type]
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, Type.getInternalName(ConstantPools.class), "getConstantPool", Type.getMethodDescriptor(Type.getType(ConstantPool.class), Type.LONG_TYPE), true); // stack: [this, pool]
+        mv.visitInsn(Opcodes.DUP_X1); // stack: [pool, this, pool]
+        mv.visitFieldInsn(Opcodes.PUTFIELD, clzName, fldCpName, Type.getDescriptor(ConstantPool.class)); // [pool]
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitLabel(l); // stack: [pool]
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitMaxs(3, 2);
         mv.visitEnd();
     }
 
@@ -150,7 +176,7 @@ final class CodeGenerator {
         }
 
         String fldDescriptor = (isArray ? "[" : "") + Type.getDescriptor(fldType);
-        cv.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, fieldName, fldDescriptor, null, null).visitEnd();
+        cv.visitField(Opcodes.ACC_PRIVATE, fieldName, fldDescriptor, null, null).visitEnd();
         MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, methodName, "()" + (isArray ? "[" : "") + Type.getDescriptor(fldType), null, null);
         mv.visitCode();
         mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
@@ -689,13 +715,28 @@ final class CodeGenerator {
         }
     }
 
+    static void addFieldLoaders(MethodVisitor mv, String clzName, List<MetadataField> allFields, Set<MetadataField> appliedFields, ParserContext context, int contextIdx, int metadataIdx) {
+        int lastVarIdx = metadataIdx; // guard
+
+        for (MetadataField fld : allFields) {;
+            if (!appliedFields.contains(fld)) {
+                // skip
+                mv.visitVarInsn(Opcodes.ALOAD, 1); // [stream]
+                addFieldSkipper(mv, fld, 1, metadataIdx); // []
+                continue;
+            }
+            mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
+            mv.visitVarInsn(Opcodes.ALOAD, 1); // [this, stream]
+            addFieldLoader(mv, fld, clzName.replace('.', '/'),  1, metadataIdx, lastVarIdx, context); // []
+        }
+    }
+
     static void prepareConstructor(ClassVisitor cv, String clzName, MetadataClass clz, List<MetadataField> allFields, Set<MetadataField> appliedFields, ParserContext context) {
+        int contextIdx = 2;
+        int metadataIdx = 3;
+
         MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PUBLIC, "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(RecordingStream.class)), null, null);
         mv.visitCode();
-        int contextIdx = 2;
-        int meteadataIdx = 3;
-        int lastVarIdx = meteadataIdx; // guard
-
         mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitMethodInsn(Opcodes.INVOKESPECIAL, Type.getInternalName(Object.class), "<init>", Type.getMethodDescriptor(Type.VOID_TYPE), false);
         // store context field
@@ -706,20 +747,44 @@ final class CodeGenerator {
         mv.visitVarInsn(Opcodes.ASTORE, contextIdx); // [this, ctx]
         mv.visitInsn(Opcodes.DUP); // [this, ctx, ctx]
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(ParserContext.class), "getMetadataLookup", Type.getMethodDescriptor(Type.getType(MetadataLookup.class)), false); // [this, ctx, metadata]
-        mv.visitVarInsn(Opcodes.ASTORE, meteadataIdx); // [this, ctx]
+        mv.visitVarInsn(Opcodes.ASTORE, metadataIdx); // [this, ctx]
         mv.visitFieldInsn(Opcodes.PUTFIELD, clzName.replace('.', '/'), "context", Type.getDescriptor(ParserContext.class)); // []
 
-        for (MetadataField fld : allFields) {;
-            if (!appliedFields.contains(fld)) {
-                // skip
-                mv.visitVarInsn(Opcodes.ALOAD, 1); // [stream]
-                addFieldSkipper(mv, fld, 1, meteadataIdx); // []
-                continue;
+        addFieldLoaders(mv, clzName, allFields, appliedFields, context, contextIdx, metadataIdx);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+    }
+
+    static void prepareRefresher(ClassVisitor cv, String clzName, List<MetadataField> allFields, Set<MetadataField> appliedFields, ParserContext context) {
+        int contextIdx = 2;
+        int metadataIdx = 3;
+
+        MethodVisitor mv = cv.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, "refresh", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(RecordingStream.class)), null, null);
+        mv.visitCode();
+        mv.visitVarInsn(Opcodes.ALOAD,0); // [this]
+        mv.visitFieldInsn(Opcodes.GETFIELD, clzName.replace('.', '/'), "context", Type.getDescriptor(ParserContext.class)); // [this, ctx]
+        mv.visitInsn(Opcodes.DUP); // [this, ctx, ctx]
+        mv.visitVarInsn(Opcodes.ASTORE, contextIdx); // [this, ctx]
+        mv.visitInsn(Opcodes.DUP); // [this, ctx, ctx]
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(ParserContext.class), "getMetadataLookup", Type.getMethodDescriptor(Type.getType(MetadataLookup.class)), false); // [this, ctx, metadata]
+        mv.visitVarInsn(Opcodes.ASTORE, metadataIdx); // [this, ctx]
+
+        for (MetadataField fld : allFields) {
+            if (fld.hasConstantPool() && appliedFields.contains(fld)) {
+                // reset the resolved constant pool values fields
+                mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
+                MetadataClass fldType = fld.getType();
+                while (fldType.isSimpleType()) {
+                    fldType = fldType.getFields().getFirst().getType();
+                }
+                Class<?> fldClass = context.getClassTargetType(fldType.getName());
+                String fldValDesc = (fld.getDimension() > 0 ? "[" : "") + Type.getDescriptor(fldClass);
+                mv.visitInsn(Opcodes.ACONST_NULL);
+                mv.visitFieldInsn(Opcodes.PUTFIELD, clzName.replace('.', '/'), fld.getName() + "_val", fldValDesc);
             }
-            mv.visitVarInsn(Opcodes.ALOAD, 0); // [this]
-            mv.visitVarInsn(Opcodes.ALOAD, 1); // [this, stream]
-            addFieldLoader(mv, fld, clzName.replace('.', '/'),  1, meteadataIdx, lastVarIdx, context); // []
         }
+        addFieldLoaders(mv, clzName, allFields, appliedFields, context, 2, 3);
         mv.visitInsn(Opcodes.RETURN);
         mv.visitMaxs(0, 0);
         mv.visitEnd();
@@ -796,7 +861,7 @@ final class CodeGenerator {
             throw new RuntimeException("Unsupported type: " + clz.getName());
         }
         if (target == null) {
-            return new Deserializer.Generated<>(null, null, createSkipper(clz));
+            return new Deserializer.Generated<>(target, null, null, null, createSkipper(clz));
         }
         String origClzName = target != null ? target.getName() : clz.getName();
         String origSimpleName = target != null ? target.getSimpleName() : clz.getSimpleName();
@@ -856,6 +921,7 @@ final class CodeGenerator {
                 }
 
                 prepareConstructor(cw, clzName, current, allFields, appliedFields, clz.getContext());
+                prepareRefresher(cw, clzName, allFields, appliedFields, clz.getContext());
             }
             prepareSkipHandler(cw, current);;
         }
@@ -884,8 +950,9 @@ final class CodeGenerator {
         try {
             MethodHandles.Lookup lkp = MethodHandles.lookup().defineHiddenClass(classData, true, MethodHandles.Lookup.ClassOption.NESTMATE);
             MethodHandle ctrHandle = target != null ? lkp.findConstructor(lkp.lookupClass(), MethodType.methodType(void.class, RecordingStream.class)) : null;
+            MethodHandle refreshHandle = target != null && TypeGenerator.isEvent(clz) ? lkp.findVirtual(lkp.lookupClass(), "refresh", MethodType.methodType(void.class, RecordingStream.class)) : null;
             MethodHandle skipHandle = lkp.findStatic(lkp.lookupClass(), "skip", MethodType.methodType(void.class, RecordingStream.class));
-            return new Deserializer.Generated<>(ctrHandle, skipHandle, createSkipper(clz));
+            return new Deserializer.Generated<>(target, ctrHandle, refreshHandle, skipHandle, createSkipper(clz));
         } catch (Exception e) {
             log.error("Failed to load generated handler class for {}, bytecode can be found at {}", clz, debugPath, e);
             throw new RuntimeException(e);
